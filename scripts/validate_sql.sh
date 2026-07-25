@@ -78,7 +78,7 @@ $$;
 SQL
 
 fail=0
-for f in supabase/01_schema.sql supabase/02_rls.sql supabase/03_insights.sql supabase/04_seed.sql; do
+for f in supabase/01_schema.sql supabase/02_rls.sql supabase/03_insights.sql supabase/04_seed.sql supabase/05_metrics.sql; do
   echo
   echo "=== $f ==="
   if run -q < "$f"; then
@@ -179,6 +179,20 @@ SQL
 
   run -At -c "select 'order_items', count(*) from order_items union all select 'orders', count(*) from orders;"
 
+  # Every RPC the Netlify Functions call by name must exist, or the endpoint
+  # returns PGRST202 and the page renders empty. This is the check that was
+  # missing when the dashboard shipped with four functions that did not exist.
+  echo
+  echo "=== every RPC the API calls must exist and run ==="
+  for fn in get_dashboard_kpis get_sales_trend get_category_profit get_region_sales get_insights compute_insights; do
+    printf '  %-22s ' "$fn"
+    run -At -c "select count(*)::text || ' row(s)' from (select $fn()) t;" 2>&1 | tail -1
+  done
+
+  echo
+  echo "=== KPI values ==="
+  run -At -c "select key || ' = ' || round(value,2)::text || ' (delta ' || delta::text || ')' from get_dashboard_kpis();"
+
   echo
   echo "=== compute_insights() with real rows ==="
   run -At -c "select jsonb_pretty(jsonb_agg(jsonb_build_object(
@@ -190,7 +204,7 @@ SQL
 
   echo
   echo "=== re-run idempotency: all four again ==="
-  for f in supabase/01_schema.sql supabase/02_rls.sql supabase/03_insights.sql supabase/04_seed.sql; do
+  for f in supabase/01_schema.sql supabase/02_rls.sql supabase/03_insights.sql supabase/04_seed.sql supabase/05_metrics.sql; do
     run -q < "$f" >/dev/null 2>&1 && echo "  $f OK" || { echo "  $f FAILED ON RERUN"; fail=1; }
   done
 fi
