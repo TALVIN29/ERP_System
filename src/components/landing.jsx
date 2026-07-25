@@ -113,11 +113,15 @@ export function StatBand() {
   const animated = useRef(false);
   const isReducedMotion = reducedMotion();
 
+  // Every figure here is computed from the real Superstore export, not chosen.
+  // Revenue $2,297,201 across 9,994 lines; Bookcases, Tables and Supplies each
+  // sell at a loss; and profit first turns negative in the 30% discount bucket
+  // (20% still returns $90,338, so the widely-quoted 20% is simply wrong).
   const stats = [
     { value: 9994, label: 'order lines' },
-    { value: 2290000, label: 'revenue', fmt: (n) => `$${(n / 1000).toFixed(0)}K` },
-    { value: 17, label: 'margin leaks' },
-    { value: 20, label: 'break-even discount', fmt: (n) => `${n}%` },
+    { value: 2297201, label: 'revenue', fmt: (n) => `$${(n / 1000000).toFixed(2)}M` },
+    { value: 3, label: 'sub-categories at a loss' },
+    { value: 30, label: 'break-even discount', fmt: (n) => `${n}%` },
   ];
 
   useEffect(() => {
@@ -267,6 +271,8 @@ export function ScreenshotFrame() {
   );
 }
 
+const PER_DAY = 93;
+
 export function TickingCounter() {
   const ref = useRef(null);
   const intervalRef = useRef(null);
@@ -274,7 +280,9 @@ export function TickingCounter() {
 
   useEffect(() => {
     if (isReducedMotion) return;
-    const perDay = 231;
+    // $135,376 of profit lost above the 30% break-even, over the 1,457 days the
+    // dataset spans (2015-01-03 to 2018-12-30).
+    const perDay = PER_DAY;
     const perSecond = perDay / (24 * 60 * 60);
     let elapsed = 0;
 
@@ -292,7 +300,7 @@ export function TickingCounter() {
 
   return (
     <span ref={ref} className="font-mono font-semibold text-[var(--text-primary)] tabular-nums">
-      {isReducedMotion ? '231' : '0'}
+      {isReducedMotion ? String(PER_DAY) : '0'}
     </span>
   );
 }
@@ -308,7 +316,7 @@ export function FomoBand() {
         </p>
         <div className="bg-[var(--status-critical)]/10 border border-[var(--status-critical)]/20 rounded-[var(--radius-lg)] p-4 mb-6">
           <p className="text-[15px] font-medium text-[var(--text-primary)] mb-2">
-            $<TickingCounter /> in margin lost per day at 20%+ discount
+            $<TickingCounter /> in margin lost per day at 30%+ discount
           </p>
           <p className="text-[12px] text-[var(--text-secondary)]">
             Analysed on 9,994 real order lines · <a href="https://github.com" className="text-[var(--series-1)] hover:underline">GitHub</a>

@@ -129,7 +129,7 @@ export default function Signup() {
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 to-black/80" />
         <div className="relative flex items-center justify-center p-8">
           <blockquote className="text-[28px] font-semibold text-white text-center leading-tight">
-            Above 20% discount every order loses money.
+            Above 30% discount every order loses money.
           </blockquote>
         </div>
       </div>
