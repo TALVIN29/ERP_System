@@ -3,7 +3,7 @@
 An ERP dashboard built to answer a question most ERPs dodge: *what should I do about
 this number?* Every insight it surfaces carries a recommended action.
 
-Live demo: _not deployed yet_ · Dataset: Kaggle Superstore · Stack: React + Vite +
+Live demo: **https://superstore-erp.netlify.app** · Dataset: Kaggle Superstore · Stack: React + Vite +
 Supabase + Netlify Functions
 
 ---
@@ -67,6 +67,8 @@ Run these in the SQL Editor **in order**. Each is idempotent and safe to re-run.
 | `supabase/02_rls.sql` | Helper functions, RLS on every table, 32 policies |
 | `supabase/03_insights.sql` | Six insight rules and `compute_insights()` |
 | `supabase/04_seed.sql` | 40 permissions, 6 roles, 73 grants, 6 demo users, defaults |
+| `supabase/05_metrics.sql` | Dashboard aggregate RPCs and scope options |
+| `supabase/06_grants.sql` | Transactional permission-matrix save |
 
 Then set the Netlify environment variables: `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
 `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
@@ -161,34 +163,67 @@ and asserted.
 
 ## Verification
 
-Run the SQL against a throwaway Postgres before touching a real project:
+### End-to-end
+
+```bash
+npm run e2e                                        # against a local build
+BASE_URL=https://your-site.netlify.app npm run e2e # against a deploy
+```
+
+**38 tests, three suites.** `smoke.spec.js` loads every route as both Admin and Manager
+and asserts no uncaught error, no failing `/api` call and no stuck skeleton.
+`flows.spec.js` covers behaviour a smoke test cannot see — the `Idempotency-Key` reused
+across submits from one open drawer, controls absent for a Viewer, filter options
+populated from data, the matrix lockout, theme persistence, the audit log having no write
+controls. `security.spec.js` asserts authorization is enforced by the server: a forged JWT
+is refused, a Viewer's create and delete are refused, a keyless mutation is refused.
+
+Every route-crashing bug in this project was invisible to `npm run build` and obvious the
+moment a page was opened. That is what this suite exists to catch, and it was validated by
+reintroducing a real bug and confirming the tests went red.
+
+**`mutations.spec.js` refuses to run against a remote target.** It writes, and it is
+gated behind `ALLOW_MUTATION_TESTS=1` plus a non-remote `BASE_URL`. This is not caution
+for its own sake: running it against production once deleted all 73 `role_permissions`
+rows and locked every user out of every endpoint.
+
+### SQL
 
 ```bash
 bash scripts/validate_sql.sh    # needs Docker
 ```
 
-It runs all four files, re-runs them to prove idempotency, seeds sample rows, checks the
-grant counts per role, asserts `compute_insights()` actually produces findings, and —
-importantly — exercises the RLS policies through a **non-superuser** role. psql connects
-as a superuser by default, which bypasses RLS entirely and makes every policy look fine.
+Runs all six files against a throwaway `postgres:16`, re-runs them to prove idempotency,
+seeds sample rows, checks grant counts per role, asserts every RPC the API calls by name
+actually exists, asserts `compute_insights()` produces findings, and proves the matrix
+save is atomic — a rejected save must leave the grant count unchanged.
 
-The API's pure logic has its own check:
+It exercises RLS through a **non-superuser** role. psql connects as a superuser by
+default, which bypasses RLS entirely and makes every policy look correct when it is not.
+
+### API logic
 
 ```bash
 node netlify/functions/_lib/selfcheck.mjs
 ```
 
-Verified against a live Supabase project: all six demo users authenticate, each reads its
-own role and exactly its own grant count (37/12/7/4/8/5), and scope values load correctly.
+### Recovery
+
+```bash
+node scripts/restore_grants.mjs   # rebuild role_permissions from the canonical definition
+```
 
 ---
 
 ## Known gaps
 
-- **No runtime UI verification.** The build compiles and the code has been reviewed, but
-  the pages have not been driven in a browser end to end.
-- **Scope correctness is proven for reads of roles and grants, not for business rows** —
-  the business tables are still empty pending the dataset.
+- **The D3 scatter does not render on real data.** `03_insights.sql` emits
+  `evidence: {type: 'discount-scatter'}` with no `points` array, so the Insights evidence
+  panel falls back to the decile table. The fixture backend supplies points; the SQL does
+  not.
+- **CRUD write flows are not covered end to end.** The create drawer, the
+  delete-blocked-by-dependants path and the settings dirty-bar save are exercised only by
+  the mutation suite, which does not run against a deployed environment.
 - **Page-level scope chips** on Orders, Products and Customers list every value when the
   user is unscoped, instead of reading "All regions". The topbar chip is correct.
 - **No LLM layer.** `/api/export` returns model-ready JSON instead; the Insights export
