@@ -113,6 +113,18 @@ as $$
   order by oi.region;
 $$;
 
+-- Scope options for the Users screen, derived from the data rather than a
+-- hardcoded list, so swapping the dataset needs no code change.
+create or replace function get_scope_options()
+returns table (regions text[], categories text[])
+language sql
+stable
+as $$
+  select
+    array(select distinct region from order_items where region is not null order by region),
+    array(select distinct category from order_items where category is not null order by category);
+$$;
+
 -- netlify/functions/insights.js calls get_insights(); the rule engine in
 -- 03_insights.sql is named compute_insights(). A thin alias is cheaper than
 -- keeping two call sites in step.

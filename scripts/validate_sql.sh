@@ -184,7 +184,7 @@ SQL
   # missing when the dashboard shipped with four functions that did not exist.
   echo
   echo "=== every RPC the API calls must exist and run ==="
-  for fn in get_dashboard_kpis get_sales_trend get_category_profit get_region_sales get_insights compute_insights; do
+  for fn in get_dashboard_kpis get_sales_trend get_category_profit get_region_sales get_insights get_scope_options compute_insights; do
     printf '  %-22s ' "$fn"
     run -At -c "select count(*)::text || ' row(s)' from (select $fn()) t;" 2>&1 | tail -1
   done
