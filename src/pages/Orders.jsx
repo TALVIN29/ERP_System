@@ -25,11 +25,10 @@ export default function Orders() {
     setPage, setPageSize, setSort, setFilters, setSearchQ,
     handleNewClick, handleEditClick, handleDrawerClose, handleSubmit,
     handleDeleteClick, handleConfirmDelete, setConfirmOpen,
+    // `scope` comes back FROM this call, so it cannot be read inside the
+    // argument — that is a temporal dead zone error that crashes the route.
+    // The filter options are built below, where scope actually exists.
   } = useCrudPage('orders', {
-    filterSchema: [
-      { key: 'region', label: 'Region', options: scope?.regions || [] },
-      { key: 'category', label: 'Category', options: scope?.categories || [] },
-    ],
     perms: { canRead, canCreate, canUpdate, canDelete },
   });
 

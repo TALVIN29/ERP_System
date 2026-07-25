@@ -16,7 +16,11 @@ const cx = (...parts) => parts.filter(Boolean).join(' ');
  * Shared CRUD list/filter/sort/paginate/drawer/delete state. All pages
  * (Orders, Products, Customers) reuse this single hook.
  */
-export function useCrudPage(endpoint, { columns = [], filterSchema = [], perms = {} }) {
+// `columns` and `filterSchema` used to be accepted here and never read. Pages
+// passed them anyway, and building them required `scope` — which this hook
+// returns — so the argument referenced a binding that did not exist yet and
+// crashed the route. Taking only what is used removes the trap.
+export function useCrudPage(endpoint, { perms = {} }) {
   const { perms: authPerms } = useAuth();
 
   // State

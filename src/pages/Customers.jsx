@@ -24,12 +24,8 @@ export default function Customers() {
     setPage, setPageSize, setSort, setFilters, setSearchQ,
     handleNewClick, handleEditClick, handleDrawerClose, handleSubmit,
     handleDeleteClick, handleConfirmDelete, setConfirmOpen,
+    // See Orders.jsx: reading `scope` here is a temporal dead zone crash.
   } = useCrudPage('customers', {
-    filterSchema: [
-      { key: 'region', label: 'Region', options: scope?.regions || [] },
-      { key: 'segment', label: 'Segment', options: ['Consumer', 'Corporate', 'Home Office'] },
-      { key: 'state', label: 'State', options: [] },
-    ],
     perms: { canRead, canCreate, canUpdate, canDelete },
   });
 

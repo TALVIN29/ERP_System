@@ -24,11 +24,8 @@ export default function Products() {
     setPage, setPageSize, setSort, setFilters, setSearchQ,
     handleNewClick, handleEditClick, handleDrawerClose, handleSubmit,
     handleDeleteClick, handleConfirmDelete, setConfirmOpen,
+    // See Orders.jsx: reading `scope` here is a temporal dead zone crash.
   } = useCrudPage('products', {
-    filterSchema: [
-      { key: 'category', label: 'Category', options: scope?.categories || [] },
-      { key: 'sub_category', label: 'Sub-category', options: [] },
-    ],
     perms: { canRead, canCreate, canUpdate, canDelete },
   });
 
