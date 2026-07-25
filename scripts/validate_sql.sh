@@ -78,7 +78,7 @@ $$;
 SQL
 
 fail=0
-for f in supabase/01_schema.sql supabase/02_rls.sql supabase/03_insights.sql supabase/04_seed.sql supabase/05_metrics.sql supabase/06_grants.sql supabase/07_perf.sql; do
+for f in supabase/01_schema.sql supabase/02_rls.sql supabase/03_insights.sql supabase/04_seed.sql supabase/05_metrics.sql supabase/06_grants.sql supabase/07_perf.sql supabase/08_perf2.sql; do
   echo
   echo "=== $f ==="
   if run -q < "$f"; then
@@ -224,6 +224,21 @@ SQL
   # Every RPC the Netlify Functions call by name must exist, or the endpoint
   # returns PGRST202 and the page renders empty. This is the check that was
   # missing when the dashboard shipped with four functions that did not exist.
+  # 08_perf2.sql rewrote the business-table policies for speed. A faster policy
+  # that leaks rows is worse than a slow one, so assert the scoping directly:
+  # each role must see ONLY its own regions/categories through RLS.
+  echo
+  echo "=== scoping still holds after the policy rewrite ==="
+  for email in admin manager viewer warehouse; do
+    printf '  %-10s ' "$email"
+    run -At -c "set role app_user;
+      select set_config('test.uid', (select id::text from auth.users where email='$email@superstore.demo'), false);
+      select 'regions=' || coalesce((select string_agg(distinct region, ',' order by region) from order_items), 'none')
+          || '  categories=' || coalesce((select string_agg(distinct category, ',' order by category) from order_items), 'none')
+          || '  rows=' || (select count(*)::text from order_items);" | tail -1
+  done
+  echo "  (manager must be East only; warehouse Central + Furniture only)"
+
   echo
   echo "=== every RPC the API calls must exist and run ==="
   for fn in get_dashboard_kpis get_sales_trend get_category_profit get_region_sales get_insights get_scope_options compute_insights; do
@@ -246,7 +261,7 @@ SQL
 
   echo
   echo "=== re-run idempotency: all four again ==="
-  for f in supabase/01_schema.sql supabase/02_rls.sql supabase/03_insights.sql supabase/04_seed.sql supabase/05_metrics.sql supabase/06_grants.sql supabase/07_perf.sql; do
+  for f in supabase/01_schema.sql supabase/02_rls.sql supabase/03_insights.sql supabase/04_seed.sql supabase/05_metrics.sql supabase/06_grants.sql supabase/07_perf.sql supabase/08_perf2.sql; do
     run -q < "$f" >/dev/null 2>&1 && echo "  $f OK" || { echo "  $f FAILED ON RERUN"; fail=1; }
   done
 fi
