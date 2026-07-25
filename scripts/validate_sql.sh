@@ -66,9 +66,15 @@ create table if not exists auth.identities (
   updated_at timestamptz default now(),
   unique (provider_id, provider)
 );
--- Returns the first seeded user so scoped queries have someone to be.
+-- Impersonate a specific user via a session setting, falling back to the first
+-- seeded one. This is what lets the harness test policies per role.
 create or replace function auth.uid() returns uuid
-language sql stable as $$ select id from auth.users order by created_at limit 1 $$;
+language sql stable as $$
+  select coalesce(
+    nullif(current_setting('test.uid', true), '')::uuid,
+    (select id from auth.users order by created_at limit 1)
+  )
+$$;
 SQL
 
 fail=0
@@ -113,6 +119,25 @@ if [ "$fail" -eq 0 ]; then
 
   # Creating the function only proves it parses and plans. Real rows are what
   # prove the rules fire and survive their own arithmetic.
+  # psql connects as a superuser, which bypasses RLS completely — so none of
+  # the checks above actually exercise a policy. This role does not, which is
+  # the only way to catch a policy that locks a user out of their own nav.
+  echo
+  echo "=== RLS as a non-superuser: each role must read its OWN role and grants ==="
+  run -q -c "create role app_user nologin;
+             grant usage on schema public, auth to app_user;
+             grant select, insert, update, delete on all tables in schema public to app_user;
+             grant select on all tables in schema auth to app_user;" >/dev/null 2>&1
+  for email in admin manager analyst viewer finance warehouse; do
+    printf '  %-10s ' "$email"
+    run -At -c "set role app_user;
+                select set_config('test.uid', (select id::text from auth.users where email = '$email@superstore.demo'), false);
+                select coalesce((select r.key from profiles p join roles r on r.id = p.role_id where p.user_id = auth.uid()), 'NO ROLE VISIBLE')
+                       || '  grants=' ||
+                       (select count(*)::text from role_permissions rp where rp.role_id = current_role_id());" \
+      | tail -1
+  done
+
   echo
   echo "=== generating sample business data ==="
   run -q <<'SQL' || fail=1

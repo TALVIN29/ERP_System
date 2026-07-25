@@ -32,6 +32,20 @@ as $$
   )
 $$;
 
+-- Every signed-in user has to read their OWN role and grants to build the nav,
+-- long before anyone checks whether they may read the roles module. Without
+-- this the login succeeds and the permission set comes back empty, so the user
+-- lands on an app with no navigation at all.
+create or replace function current_role_id()
+returns int
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select role_id from profiles where user_id = auth.uid()
+$$;
+
 -- A NULL argument means "this axis does not apply, skip it" -- do not rely on
 -- three-valued logic here. Previously `category is null` alone made the whole
 -- AND clause NULL (not true) whenever scope_categories was non-empty, which
@@ -143,23 +157,25 @@ create policy "order_items_delete" on order_items
   for delete using (has_perm('orders', 'delete') and in_scope(region, category));
 
 -- Platform tables: roles (only admins can see/edit)
+-- You can always see your own role; seeing everyone's needs roles.read.
 drop policy if exists "roles_read" on roles;
 create policy "roles_read" on roles
-  for select using (has_perm('roles', 'read'));
+  for select using (id = current_role_id() or has_perm('roles', 'read'));
 
 drop policy if exists "roles_update" on roles;
 create policy "roles_update" on roles
   for update using (has_perm('roles', 'update')) with check (has_perm('roles', 'update'));
 
--- Platform tables: permissions (read-only, gated)
+-- The permission catalogue is the app's vocabulary, not a secret: it is the
+-- same 40 module/action pairs for everyone and is needed to join grants.
 drop policy if exists "permissions_read" on permissions;
 create policy "permissions_read" on permissions
-  for select using (has_perm('roles', 'read'));
+  for select using (auth.uid() is not null);
 
--- Platform tables: role_permissions
+-- Your own grants build your nav; everyone else's needs roles.read.
 drop policy if exists "role_permissions_read" on role_permissions;
 create policy "role_permissions_read" on role_permissions
-  for select using (has_perm('roles', 'read'));
+  for select using (role_id = current_role_id() or has_perm('roles', 'read'));
 
 drop policy if exists "role_permissions_update" on role_permissions;
 create policy "role_permissions_update" on role_permissions
