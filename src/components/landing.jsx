@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { countUp } from '../lib/countup.js';
+import { heroImage, cardImage } from '../lib/img.js';
 import {
   IconLines, IconSales, IconWarning, IconPercent, IconProfit, IconOrders, IconAvgOrder,
 } from './icons.jsx';
@@ -78,7 +79,7 @@ export function Hero() {
       className="relative h-screen flex items-center justify-center overflow-hidden"
     >
       <img
-        src="https://images.unsplash.com/photo-1553413077-190dd305871c?auto=format&fit=crop&w=1920&q=70"
+        {...heroImage('https://images.unsplash.com/photo-1553413077-190dd305871c')}
         alt="Warehouse with shelving and inventory management"
         className="absolute inset-0 w-full h-full object-cover"
         onError={(e) => {
@@ -217,7 +218,7 @@ export function FeatureRow({ image, title, description, imagePosition = 'left' }
   const imageEl = (
     <div className="flex-1 min-h-[300px] rounded-[var(--radius-lg)] overflow-hidden bg-[var(--surface-sunken)]">
       <img
-        src={image}
+        {...cardImage(image)}
         alt={title}
         className="w-full h-full object-cover"
         loading="lazy"
@@ -326,21 +327,28 @@ export function ScreenshotFrame() {
 
           <div className="rounded-[var(--radius-md)] border border-[var(--border-hairline)] bg-[var(--surface-card)] p-3">
             <p className="text-[11px] font-medium text-[var(--text-primary)] mb-2">Sales over time</p>
-            <svg viewBox="0 0 600 130" className="w-full h-[110px]" role="img"
+            {/* The viewBox aspect has to match the box the SVG renders into.
+                It was 600x130 (4.6:1) inside a w-full h-[110px] slot that is
+                nearer 9.6:1, so the default xMidYMid meet scaled the drawing
+                down to fit the HEIGHT and centred it — the line covered about
+                half the card and the rest was blank. Sizing by aspect-ratio
+                instead keeps scaling uniform, so the stroke stays 2px and the
+                end dot stays round. */}
+            <svg viewBox="0 0 600 62" className="w-full aspect-[600/62]" role="img"
                  aria-label="Monthly sales trend, rising over four years">
-              {[0, 32, 64, 96].map((y) => (
-                <line key={y} x1="0" y1={y + 8} x2="600" y2={y + 8} stroke="var(--gridline)" strokeWidth="1" />
+              {[12, 27, 42, 57].map((y) => (
+                <line key={y} x1="0" y1={y} x2="600" y2={y} stroke="var(--gridline)" strokeWidth="1" />
               ))}
               <polyline
                 fill="none"
                 stroke="var(--series-1)"
                 strokeWidth="2"
                 strokeLinejoin="round"
-                points={TREND.map((v, i) => `${(i / (TREND.length - 1)) * 596 + 2},${120 - v * 1.05}`).join(' ')}
+                points={TREND.map((v, i) => `${(i / (TREND.length - 1)) * 590 + 5},${58 - v * 0.62}`).join(' ')}
               />
               <circle
-                cx="598"
-                cy={120 - TREND[TREND.length - 1] * 1.05}
+                cx="595"
+                cy={58 - TREND[TREND.length - 1] * 0.62}
                 r="3.5"
                 fill="var(--series-1)"
               />
@@ -356,27 +364,24 @@ const PER_DAY = 93;
 
 export function TickingCounter() {
   const ref = useRef(null);
-  const intervalRef = useRef(null);
   const isReducedMotion = reducedMotion();
 
   useEffect(() => {
-    if (isReducedMotion) return;
-    // $135,376 of profit lost above the 30% break-even, over the 1,457 days the
-    // dataset spans (2015-01-03 to 2018-12-30).
-    const perDay = PER_DAY;
-    const perSecond = perDay / (24 * 60 * 60);
-    let elapsed = 0;
-
-    const tick = () => {
-      elapsed += 1;
-      const current = Math.floor(perSecond * elapsed);
-      if (ref.current) {
-        ref.current.textContent = current.toLocaleString();
-      }
-    };
-
-    intervalRef.current = setInterval(tick, 1000);
-    return () => clearInterval(intervalRef.current);
+    if (isReducedMotion || !ref.current) return;
+    // Counts up to the figure once, then stops.
+    //
+    // It used to accumulate on a 1s interval at perDay/86400 — $0.001 a second
+    // — inside a Math.floor. It therefore displayed "$0" for the first fifteen
+    // and a half minutes, which is to say always. The label says "per day", so
+    // the per-day figure is the number that belongs here; there was never
+    // anything for an interval to accumulate.
+    // countUp's default format is String, which would spell out every
+    // intermediate float ("41.83729"); only the pinned final frame is integral.
+    return countUp(ref.current, {
+      to: PER_DAY,
+      duration: 1200,
+      format: (n) => Math.round(n).toLocaleString(),
+    });
   }, [isReducedMotion]);
 
   return (
