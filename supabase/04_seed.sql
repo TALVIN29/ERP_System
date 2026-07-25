@@ -320,6 +320,33 @@ insert into profiles (user_id, full_name, role_id, scope_regions, scope_categori
   array['Furniture']::text[]
 ) on conflict do nothing;
 
+-- GoTrue reads auth.users into Go structs whose token fields are plain strings,
+-- not pointers. A NULL in any of them fails the scan and every login returns
+-- "Database error querying schema" — the row looks fine in SQL and still cannot
+-- authenticate. Inserting rows by hand is the only way to hit this, so it has
+-- to be repaired by hand too.
+--
+-- The column set differs between GoTrue versions, so only touch what exists.
+do $$
+declare
+  col text;
+begin
+  foreach col in array array[
+    'confirmation_token', 'recovery_token', 'email_change', 'email_change_token_new',
+    'email_change_token_current', 'phone_change', 'phone_change_token', 'reauthentication_token'
+  ] loop
+    if exists (
+      select 1 from information_schema.columns
+      where table_schema = 'auth' and table_name = 'users' and column_name = col
+    ) then
+      execute format(
+        'update auth.users set %I = %L where %I is null and email like %L',
+        col, '', col, '%@superstore.demo'
+      );
+    end if;
+  end loop;
+end $$;
+
 -- Seed default settings
 insert into settings (scope, key, value) values
   ('org', 'org_name', '"Superstore Trading Co."'),

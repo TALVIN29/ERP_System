@@ -43,10 +43,16 @@ create table if not exists auth.users (
   raw_user_meta_data jsonb,
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
+  -- GoTrue scans these into non-nullable Go strings, so the seed has to leave
+  -- them empty rather than null. Mirrored here so the harness exercises that.
   confirmation_token text,
   recovery_token text,
   email_change_token_new text,
+  email_change_token_current text,
   email_change text,
+  phone_change text,
+  phone_change_token text,
+  reauthentication_token text,
   last_sign_in_at timestamptz
 );
 create table if not exists auth.identities (
@@ -88,6 +94,16 @@ if [ "$fail" -eq 0 ]; then
               select 'auth.identities', count(*) from auth.identities union all
               select 'profiles', count(*) from profiles union all
               select 'settings', count(*) from settings;"
+
+  echo
+  echo "=== auth token columns must be '' not null (GoTrue cannot scan null) ==="
+  run -At -c "select count(*) || ' demo users with a null token column (must be 0)'
+              from auth.users
+              where email like '%@superstore.demo'
+                and (confirmation_token is null or recovery_token is null
+                     or email_change is null or email_change_token_new is null
+                     or email_change_token_current is null or phone_change is null
+                     or phone_change_token is null or reauthentication_token is null);"
 
   echo
   echo "=== grants per role ==="
