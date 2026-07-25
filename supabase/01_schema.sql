@@ -1,5 +1,9 @@
 -- Business tables (normalized from Superstore)
 
+-- gen_random_uuid() is built in from Postgres 13, but the seed needs crypt()
+-- anyway and an explicit extension costs nothing.
+create extension if not exists pgcrypto;
+
 create table if not exists customers (
   customer_id text primary key,
   name text not null,
@@ -29,7 +33,10 @@ create table if not exists orders (
 );
 
 create table if not exists order_items (
-  id text primary key,
+  -- The CSV import supplies its own ids ("CA-2017-152156-0"); rows created
+  -- through the API have none, so the column needs a default or every insert
+  -- fails on the not-null constraint.
+  id text primary key default gen_random_uuid()::text,
   order_id text not null references orders(order_id),
   product_id text not null references products(product_id),
   sales numeric not null,
@@ -39,6 +46,10 @@ create table if not exists order_items (
   region text not null,
   category text not null
 );
+
+-- `create table if not exists` above is a no-op on a database that already has
+-- the table, so retrofit the default explicitly. Safe to re-run.
+alter table order_items alter column id set default gen_random_uuid()::text;
 
 -- Platform tables (RBAC and operational)
 

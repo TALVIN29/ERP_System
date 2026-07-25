@@ -277,7 +277,7 @@ rule_6 as (
       join orders o on oi.order_id = o.order_id
       where in_scope(oi.region, oi.category)
       group by oi.region, date_trunc('month', o.order_date)::date
-    )
+    ),
     -- Rank the months first, then aggregate over the ranks. Slicing an
     -- array_agg and averaging it nests one aggregate inside another, and
     -- avg() takes a set of rows, never an array.
