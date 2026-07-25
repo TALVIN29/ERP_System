@@ -2,14 +2,13 @@ import { useEffect, useState } from 'react';
 import { api, newIdempotencyKey } from '../lib/api.js';
 import { useApi, useDebounced } from '../lib/useApi.js';
 import { useAuth } from '../lib/auth.jsx';
-import { Button, Card, DirtyStateBar, ErrorState, Field, InlineError, PageHeader, SegmentedControl, Select, Spinner, TextField, fmtCurrency } from '../components/ui.jsx';
+import { Button, Card, cx, DirtyStateBar, ErrorState, Field, InlineError, PageHeader, SegmentedControl, Select, Spinner, TextField, fmtCurrency } from '../components/ui.jsx';
 import { SettingsCard, ThresholdPreview } from '../components/admin.jsx';
 
 export default function Settings() {
   const { perms, theme, setTheme } = useAuth();
   const { data, error, loading, refetch } = useApi('/settings');
 
-  const [orgDirty, setOrgDirty] = useState(null);
   const [orgSaving, setOrgSaving] = useState(false);
   const [orgError, setOrgError] = useState(null);
 
@@ -28,6 +27,8 @@ export default function Settings() {
   const [defaultPage, setDefaultPage] = useState('dashboard');
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [prefError, setPrefError] = useState(null);
+  // Quiet per-control "Saved" flash: fades out on its own, no error path needed.
+  const [prefSaved, setPrefSaved] = useState(null);
 
   useEffect(() => {
     if (data?.org) {
@@ -36,7 +37,6 @@ export default function Settings() {
       setFiscalYearStart(data.org.fiscal_year_start || '01-01');
       setDiscountAlert(data.org.discount_alert || 0.2);
       setMinLoss(data.org.min_loss || 1000);
-      setOrgDirty(null);
       setOrgError(null);
     }
     if (data?.user) {
@@ -71,7 +71,6 @@ export default function Settings() {
         },
         idempotencyKey: newIdempotencyKey(),
       });
-      setOrgDirty(null);
       refetch();
     } catch (err) {
       setOrgError(err.message);
@@ -86,7 +85,6 @@ export default function Settings() {
     setFiscalYearStart(data?.org?.fiscal_year_start || '01-01');
     setDiscountAlert(data?.org?.discount_alert || 0.2);
     setMinLoss(data?.org?.min_loss || 1000);
-    setOrgDirty(null);
     setOrgError(null);
   };
 
@@ -102,6 +100,10 @@ export default function Settings() {
         body: { user: newValue },
         idempotencyKey: newIdempotencyKey(),
       });
+      const id = Date.now();
+      setPrefSaved({ key, id, fading: false });
+      setTimeout(() => setPrefSaved((s) => (s?.id === id ? { ...s, fading: true } : s)), 900);
+      setTimeout(() => setPrefSaved((s) => (s?.id === id ? null : s)), 1500);
     } catch (err) {
       setPrefError(key);
       if (key === 'default_page') setDefaultPage(data?.user?.default_page || 'dashboard');
@@ -172,6 +174,14 @@ export default function Settings() {
             {prefError === 'default_page' && (
               <InlineError>Failed to save. Try again.</InlineError>
             )}
+            {prefSaved?.key === 'default_page' && (
+              <span className={cx(
+                'text-[11px] text-[var(--status-good)] transition-opacity duration-500',
+                prefSaved.fading ? 'opacity-0' : 'opacity-100'
+              )}>
+                Saved
+              </span>
+            )}
           </div>
 
           <div>
@@ -190,6 +200,14 @@ export default function Settings() {
             </select>
             {prefError === 'rows_per_page' && (
               <InlineError>Failed to save. Try again.</InlineError>
+            )}
+            {prefSaved?.key === 'rows_per_page' && (
+              <span className={cx(
+                'text-[11px] text-[var(--status-good)] transition-opacity duration-500',
+                prefSaved.fading ? 'opacity-0' : 'opacity-100'
+              )}>
+                Saved
+              </span>
             )}
           </div>
         </div>

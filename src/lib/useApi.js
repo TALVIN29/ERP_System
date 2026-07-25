@@ -13,6 +13,7 @@ export function useApi(path, params, { skip = false } = {}) {
   const [loading, setLoading] = useState(!skip);
   const [refetching, setRefetching] = useState(false);
   const loaded = useRef(false);
+  const alive = useRef(true);
   const key = JSON.stringify(params || null);
 
   const run = useCallback(async () => {
@@ -21,19 +22,29 @@ export function useApi(path, params, { skip = false } = {}) {
     setError(null);
     try {
       const result = await api(path, { params: params || undefined });
+      if (!alive.current) return;
       setData(result);
       loaded.current = true;
     } catch (err) {
+      if (!alive.current) return;
       setError(err);
     } finally {
-      setLoading(false);
-      setRefetching(false);
+      if (alive.current) {
+        setLoading(false);
+        setRefetching(false);
+      }
     }
     // params is compared by value through `key`
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, key, skip]);
 
-  useEffect(() => { run(); }, [run]);
+  // A slow response that lands after the page navigated away must not write
+  // state into an unmounted tree.
+  useEffect(() => {
+    alive.current = true;
+    run();
+    return () => { alive.current = false; };
+  }, [run]);
 
   return { data, error, loading, refetching, refetch: run, setData };
 }

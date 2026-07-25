@@ -3,9 +3,9 @@
  * together, and every page imports from here so the app stays visually one
  * thing. Conventions live in docs/UI-PAGE-GUIDE.md § Cross-page conventions.
  */
-import { useEffect, useId, useRef, useState } from 'react';
+import { forwardRef, useEffect, useId, useRef, useState } from 'react';
 
-const cx = (...parts) => parts.filter(Boolean).join(' ');
+export const cx = (...parts) => parts.filter(Boolean).join(' ');
 
 /* ------------------------------------------------------------------ surfaces */
 
@@ -40,7 +40,10 @@ export function PageHeader({ title, count, scope, children }) {
 
 /* ------------------------------------------------------------------- buttons */
 
-export function Button({ variant = 'secondary', loading, children, className = '', ...rest }) {
+/** forwardRef so callers can move focus to it — the login demo chips do. */
+export const Button = forwardRef(function Button(
+  { variant = 'secondary', loading, children, className = '', ...rest }, ref
+) {
   const base = 'inline-flex items-center justify-center gap-2 h-9 px-4 rounded-[var(--radius-md)] text-[13px] font-medium transition-colors disabled:opacity-55 disabled:cursor-not-allowed';
   const styles = {
     primary: 'bg-[var(--series-1)] text-white hover:brightness-110',
@@ -49,12 +52,12 @@ export function Button({ variant = 'secondary', loading, children, className = '
     danger: 'bg-[var(--status-critical)] text-white hover:brightness-110',
   }[variant];
   return (
-    <button className={cx(base, styles, className)} disabled={loading || rest.disabled} {...rest}>
+    <button ref={ref} className={cx(base, styles, className)} disabled={loading || rest.disabled} {...rest}>
       {loading && <Spinner />}
       {children}
     </button>
   );
-}
+});
 
 export function Spinner({ size = 14 }) {
   return (

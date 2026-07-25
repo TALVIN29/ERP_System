@@ -397,10 +397,26 @@ function audit(action, entity, entity_id, before, after) {
   });
 }
 
-function paginate(rows, params) {
+function paginate(rows, params, extra) {
   const page = Number(params.get('page') || 1);
   const size = Number(params.get('pageSize') || 25);
-  return { rows: rows.slice((page - 1) * size, page * size), total: rows.length, page, pageSize: size };
+  return { rows: rows.slice((page - 1) * size, page * size), total: rows.length, page, pageSize: size, ...extra };
+}
+
+/**
+ * The values a page may filter by and offer in a form. A scoped user gets only
+ * their own; an unscoped one gets everything. List pages read this rather than
+ * hardcoding a taxonomy, so swapping the dataset needs no code change.
+ */
+function selectableScope(session) {
+  const { scope_regions: r, scope_categories: c } = session.profile;
+  return {
+    regions: r.length ? r : REGIONS,
+    categories: c.length ? c : CATEGORIES,
+    subCategories: CATEGORIES.flatMap((k) => SUBS[k]),
+    segments: SEGMENTS,
+    shipModes: SHIP_MODES,
+  };
 }
 
 /** Mirrors the Netlify guard chain closely enough that page code cannot tell
@@ -429,13 +445,15 @@ async function route(path, params, method, body) {
 
   if (path === '/metrics') {
     requirePerm('insights', 'read');
-    const items = scopedItems(s);
+    // The dashboard puts the range in the URL so a filtered view is linkable;
+    // it only means anything if the range actually narrows the numbers.
+    const items = inRange(scopedItems(s), params);
     return { metrics: buildMetrics(items) };
   }
 
   if (path === '/insights') {
     requirePerm('insights', 'read');
-    return { insights: computeInsights(scopedItems(s), state.settings.org) };
+    return { insights: computeInsights(inRange(scopedItems(s), params), state.settings.org) };
   }
 
   if (path === '/export') {
@@ -448,11 +466,21 @@ async function route(path, params, method, body) {
       requirePerm('orders', 'read');
       let rows = scopedOrders(s);
       rows = applyFilters(rows, params, ['order_id', 'customer_name']);
-      return paginate(sortRows(rows, params), params);
+      return paginate(sortRows(rows, params), params, { scope: selectableScope(s) });
     }
     if (method === 'POST') {
       requirePerm('orders', 'create');
-      const row = { ...body, order_id: body.order_id || `CA-${new Date().getFullYear()}-${900000 + state.orders.length}`, lines: body.lines || 1, sales: body.sales || 0 };
+      // Totals are derived from the line items, never taken on trust from the
+      // client — the same rule the real API has to follow.
+      const items = Array.isArray(body.items) ? body.items : [];
+      const row = {
+        ...body,
+        order_id: body.order_id || `CA-${new Date().getFullYear()}-${900000 + state.orders.length}`,
+        lines: items.length || body.lines || 1,
+        sales: items.length
+          ? money(items.reduce((a, i) => a + Number(i.sales || 0), 0))
+          : Number(body.sales) || 0,
+      };
       delete row.__key;
       state.orders.unshift(row);
       audit('CREATE', 'orders', row.order_id, null, row);
@@ -488,7 +516,7 @@ async function route(path, params, method, body) {
       });
       if (cats.length) rows = rows.filter((p) => cats.includes(p.category));
       rows = applyFilters(rows, params, ['product_id', 'name']);
-      return paginate(sortRows(rows, params), params);
+      return paginate(sortRows(rows, params), params, { scope: selectableScope(s) });
     }
     return mutateCollection('products', 'product_id', method, body);
   }
@@ -503,7 +531,7 @@ async function route(path, params, method, body) {
       });
       if (regions.length) rows = rows.filter((c) => regions.includes(c.region));
       rows = applyFilters(rows, params, ['customer_id', 'name']);
-      return paginate(sortRows(rows, params), params);
+      return paginate(sortRows(rows, params), params, { scope: selectableScope(s) });
     }
     return mutateCollection('customers', 'customer_id', method, body);
   }
@@ -643,6 +671,14 @@ function applyFilters(rows, params, searchFields) {
   if (from) out = out.filter((r) => !r.order_date || r.order_date >= from);
   if (to) out = out.filter((r) => !r.order_date || r.order_date <= to);
   return out;
+}
+
+/** Accepts either `from`/`to` or `date_from`/`date_to`; the dashboard has used both. */
+function inRange(items, params) {
+  const from = params.get('from') || params.get('date_from');
+  const to = params.get('to') || params.get('date_to');
+  if (!from && !to) return items;
+  return items.filter((i) => (!from || i.order_date >= from) && (!to || i.order_date <= to));
 }
 
 function sortRows(rows, params) {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Card, SeverityPill, Button } from './ui';
+import { DiscountScatter } from '../charts/DiscountScatter';
 
 const severityBg = {
   critical: 'rgba(208, 59, 59, 0.08)',
@@ -78,7 +79,6 @@ export function EvidenceTable({ evidence }) {
   if (!evidence) return null;
 
   if (evidence.type === 'discount-scatter') {
-    const { DiscountScatter } = require('../charts/DiscountScatter');
     return <DiscountScatter points={evidence.points} ladder={evidence.ladder} />;
   }
 

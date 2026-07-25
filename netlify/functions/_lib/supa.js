@@ -28,6 +28,18 @@ export function userClient(accessToken) {
  * - idempotency key storage/lookup
  * - rate limit token bucket
  * - audit log writes
+ * - reading a user's role/grants for the permission gate (step 5) — this must
+ *   never be sourced from the request or the JWT, only from the DB
  * Never returned in any response. Redacted before JSON serialization.
  */
 export const serviceClient = createClient(url, serviceKey);
+
+/**
+ * Anon-key client used ONLY to verify a bearer token via supabase.auth.getUser(token).
+ * That call round-trips to Supabase Auth and confirms the signature/expiry; it is the
+ * one legitimate way to trust a JWT's claims. Never construct the "authenticated user"
+ * from a locally base64-decoded payload.
+ */
+export function anonClient() {
+  return createClient(url, anonKey);
+}

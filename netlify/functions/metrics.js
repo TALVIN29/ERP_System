@@ -1,8 +1,36 @@
 /**
  * GET /api/metrics
- * Dashboard aggregates (KPIs, trends, category profit, region sales)
+ * Dashboard aggregates (KPIs, trends, category profit, region sales).
+ * Shape must match src/lib/mock.js's buildMetrics(): { metrics: { kpis, trend,
+ * categoryProfit, regionSales } }, where each kpi carries {key,label,value,format,delta}.
  */
 import guard from './_lib/guard.js';
+
+// The SQL side (03_insights.sql) is free to name/shape columns however is natural
+// in Postgres; this is the one seam that asserts the RPC output actually matches
+// the contract the React pages render against, and fills in any gap defensively
+// rather than shipping a KPI silently missing its delta.
+function normalizeKpi(row) {
+  return {
+    key: row.key ?? row.kpi_key ?? '',
+    label: row.label ?? row.kpi_label ?? '',
+    value: Number(row.value ?? 0),
+    format: row.format ?? 'number',
+    delta: Number(row.delta ?? 0),
+  };
+}
+
+function normalizeTrend(row) {
+  return { month: row.month, sales: Number(row.sales ?? 0) };
+}
+
+function normalizeCategoryProfit(row) {
+  return { category: row.category, profit: Number(row.profit ?? 0) };
+}
+
+function normalizeRegionSales(row) {
+  return { region: row.region, sales: Number(row.sales ?? 0) };
+}
 
 export default guard({
   module: 'insights',
@@ -23,10 +51,10 @@ export default guard({
 
     return {
       metrics: {
-        kpis: kpis || [],
-        trend: trend || [],
-        categoryProfit: categoryProfit || [],
-        regionSales: regionSales || [],
+        kpis: (kpis || []).map(normalizeKpi),
+        trend: (trend || []).map(normalizeTrend),
+        categoryProfit: (categoryProfit || []).map(normalizeCategoryProfit),
+        regionSales: (regionSales || []).map(normalizeRegionSales),
       }
     };
   }

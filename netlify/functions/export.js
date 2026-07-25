@@ -1,11 +1,14 @@
 /**
  * GET /api/export?dataset=orders
- * Flat, model-ready JSON export. Rate-limited to 5/min.
- * Writes an audit log row.
+ * Flat, model-ready JSON export. Rate-limited to 5/min. Writes an audit row.
+ * Shape must match src/lib/mock.js: order-item-shaped rows, capped at 500,
+ * regardless of the `dataset` query param — mock always exports scoped order
+ * items and only echoes `dataset` back, so this does the same rather than
+ * switching tables with no cap.
  */
 import guard from './_lib/guard.js';
-import { writeAuditLog } from './_lib/audit.js';
-import { serviceClient } from './_lib/supa.js';
+
+const CAP = 500;
 
 export default guard({
   module: 'insights',
@@ -13,34 +16,18 @@ export default guard({
   run: async (supa, body, userId, method, url) => {
     const dataset = url.searchParams.get('dataset') || 'orders';
 
-    // Validate dataset name
-    if (!['orders', 'products', 'customers'].includes(dataset)) {
-      const err = new Error('Invalid dataset');
-      err.status = 400;
-      throw err;
-    }
-
-    let { data, error } = await supa.from(dataset).select('*');
+    const { data, error } = await supa
+      .from('order_items')
+      .select('*')
+      .limit(CAP);
     if (error) throw error;
 
     const rows = data || [];
 
-    // Audit the export through the service client
-    await serviceClient.from('audit_log').insert({
-      user_id: userId,
-      action: 'export',
-      entity: dataset,
-      entity_id: dataset,
-      before: null,
-      after: { row_count: rows.length },
-      at: new Date().toISOString(),
-    });
-
     return {
       dataset,
       rows,
-      row_count: rows.length,
-      exported_at: new Date().toISOString(),
+      __audit: { action: 'export', entity: dataset, entityId: dataset, before: null, after: { row_count: rows.length } },
     };
   }
 });

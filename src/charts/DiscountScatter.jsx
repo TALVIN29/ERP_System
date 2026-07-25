@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
-import { Card, TableView } from '../components/ui';
+import { Card, TableView, fmtCurrency } from '../components/ui';
+
+// Same TableView({columns, rows}) signature as the other charts — ladder rows
+// are { discount, profit, sales, lines }.
+const ladderColumns = [
+  { key: 'discount', label: 'Discount', numeric: true, render: (r) => `${Math.round(r.discount * 100)}%` },
+  { key: 'profit', label: 'Profit', numeric: true, render: (r) => fmtCurrency(r.profit) },
+  { key: 'sales', label: 'Sales', numeric: true, render: (r) => fmtCurrency(r.sales) },
+  { key: 'lines', label: 'Lines', numeric: true },
+];
 
 export function DiscountScatter({ points = [], ladder = [] }) {
   const containerRef = useRef(null);
@@ -17,7 +26,7 @@ export function DiscountScatter({ points = [], ladder = [] }) {
           <h2 className="text-[13px] font-semibold text-[var(--text-primary)] mb-4" aria-label="Discount analysis">
             Discount analysis by decile
           </h2>
-          <TableView data={ladder} columns={['discount', 'profit', 'sales', 'lines']} />
+          <TableView columns={ladderColumns} rows={ladder} label="View as table" />
         </div>
       </Card>
     );
@@ -179,7 +188,6 @@ export function DiscountScatter({ points = [], ladder = [] }) {
         .attr('fill', 'var(--text-primary)')
         .attr('font-size', '12px')
         .attr('font-weight', '600')
-        .attr('aria-label', `Break-even approximately ${Math.round(breakEvenX * 100)}%`)
         .text(`Break-even ≈ ${Math.round(breakEvenX * 100)}%`);
     }
   };
@@ -209,7 +217,15 @@ export function DiscountScatter({ points = [], ladder = [] }) {
           Profit vs. discount
         </h2>
         <div ref={containerRef} className="overflow-x-auto">
-          <div style={{ position: 'relative', minWidth: '640px' }}>
+          <div
+            role="img"
+            aria-label={
+              breakEven !== null
+                ? `Scatter plot of profit versus discount percentage. Break-even around ${Math.round(breakEven * 100)}%; profit turns negative above that discount.`
+                : 'Scatter plot of profit versus discount percentage.'
+            }
+            style={{ position: 'relative', minWidth: '640px' }}
+          >
             <canvas ref={canvasRef} style={{ width: '100%', height: 'auto', display: 'block' }} />
             <svg ref={svgRef} style={{ position: 'absolute', top: 0, left: 0 }} />
           </div>
@@ -220,7 +236,7 @@ export function DiscountScatter({ points = [], ladder = [] }) {
           </p>
         )}
         <div className="mt-4">
-          <TableView data={ladder} columns={['discount', 'profit', 'sales', 'lines']} />
+          <TableView columns={ladderColumns} rows={ladder} label="View as table" />
         </div>
       </div>
     </Card>

@@ -15,7 +15,7 @@ import { serviceClient } from './supa.js';
  * @param {object} after - full row JSON after the change, null on delete
  */
 export async function writeAuditLog(userId, action, entity, entityId, before, after) {
-  await serviceClient.from('audit_log').insert({
+  const { error } = await serviceClient.from('audit_log').insert({
     user_id: userId,
     action,
     entity,
@@ -24,4 +24,9 @@ export async function writeAuditLog(userId, action, entity, entityId, before, af
     after: after ? JSON.parse(JSON.stringify(after)) : null,
     at: new Date().toISOString(),
   });
+  // The insert's error was previously discarded here, so a failed audit write
+  // looked identical to a successful one and the caller returned 200 with the
+  // mutation committed but nothing recorded. Throw so guard.js's caller sees
+  // a loud 500 instead of a silent gap in the trail.
+  if (error) throw error;
 }

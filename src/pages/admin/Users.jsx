@@ -3,7 +3,7 @@ import { api, newIdempotencyKey } from '../../lib/api.js';
 import { useApi, useDebounced } from '../../lib/useApi.js';
 import { useAuth } from '../../lib/auth.jsx';
 import { scopeLabel } from '../../lib/perms.js';
-import { Button, Card, DataTable, Drawer, ErrorState, Field, InlineError, PageHeader, RelativeTime, Spinner, TextField, Select } from '../../components/ui.jsx';
+import { Button, Card, ConfirmDialog, DataTable, Drawer, ErrorState, Field, InlineError, PageHeader, RelativeTime, Spinner, TextField, Select } from '../../components/ui.jsx';
 import { RoleSelect, ScopeMultiSelect, ScopePreview } from '../../components/admin.jsx';
 
 export default function Users() {
@@ -18,6 +18,7 @@ export default function Users() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [scopeError, setScopeError] = useState(null);
+  const [confirmDowngrade, setConfirmDowngrade] = useState(false);
 
   const debouncedRegions = useDebounced(regions, 200);
   const debouncedCategories = useDebounced(categories, 200);
@@ -46,21 +47,16 @@ export default function Users() {
   const handleClose = () => {
     setDrawer(false);
     setSelected(null);
+    setConfirmDowngrade(false);
   };
 
-  const handleSave = async () => {
-    const isSelfDowngrade =
-      selected.user_id === profile.user_id &&
-      role !== profile.role_key &&
-      perms.can('roles', 'update');
+  // Guarded action is changing your OWN role via users.update — roles.update
+  // governs the permission matrix, not this. The gate warns but never blocks.
+  const isSelfDowngrade =
+    selected?.user_id === profile.user_id && role !== profile.role_key;
 
-    if (isSelfDowngrade) {
-      const confirm = window.confirm(
-        'This will remove your own admin access. You will need another admin to restore it.'
-      );
-      if (!confirm) return;
-    }
-
+  const performSave = async () => {
+    setConfirmDowngrade(false);
     setSaving(true);
     setSaveError(null);
     try {
@@ -81,6 +77,14 @@ export default function Users() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSave = () => {
+    if (isSelfDowngrade) {
+      setConfirmDowngrade(true);
+      return;
+    }
+    performSave();
   };
 
   if (!perms.can('users', 'read')) {
@@ -207,6 +211,16 @@ export default function Users() {
           </div>
         )}
       </Drawer>
+
+      <ConfirmDialog
+        open={confirmDowngrade}
+        title="Change your own role?"
+        body="This will remove your own admin access. You will need another admin to restore it."
+        confirmLabel="Change role"
+        busy={saving}
+        onConfirm={performSave}
+        onClose={() => setConfirmDowngrade(false)}
+      />
     </div>
   );
 }

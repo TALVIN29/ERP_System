@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useBlocker } from 'react-router-dom';
-import anime from 'animejs';
 import { api, newIdempotencyKey } from '../../lib/api.js';
 import { useApi } from '../../lib/useApi.js';
 import { useAuth } from '../../lib/auth.jsx';
-import { Button, Card, DirtyStateBar, ErrorState, PageHeader, RefetchOverlay, Skeleton, cx } from '../../components/ui.jsx';
+import { Button, Card, ConfirmDialog, DirtyStateBar, ErrorState, PageHeader, RefetchOverlay, Skeleton, cx } from '../../components/ui.jsx';
 import { PermissionMatrix } from '../../components/admin.jsx';
 
 export default function Roles() {
@@ -27,32 +26,28 @@ export default function Roles() {
 
   const changeCount = dirty ? Object.keys(dirty).length : 0;
 
-  useBlocker(() => {
-    if (changeCount > 0) {
-      return !window.confirm('You have unsaved changes. Leave without saving?');
-    }
-    return false;
-  });
+  // Data-router navigation guard: block in-app route changes while dirty.
+  const blocker = useBlocker(() => changeCount > 0);
+
+  // Tab close / refresh isn't a router navigation, so it needs its own guard.
+  useEffect(() => {
+    const onBeforeUnload = (e) => {
+      if (changeCount > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [changeCount]);
 
   const handleChange = (roleKey, module, action) => {
+    // Lockout cells never reach here — MatrixCell disables onChange itself
+    // when toggling would strip the last roles.update grant.
     const perm = `${module}.${action}`;
     const currentGrants = dirty || data.grants;
     const rolePerms = [...(currentGrants[roleKey] || [])];
     const hasIt = rolePerms.includes(perm);
-
-    // Lockout guard: prevent removing the last roles.update
-    if (hasIt && perm === 'roles.update') {
-      const rolesWithUpdate = Object.entries(currentGrants).filter(([k, perms]) => {
-        if (k === roleKey) {
-          return perms.filter((p) => p !== perm).includes('roles.update');
-        }
-        return perms.includes('roles.update');
-      });
-      if (rolesWithUpdate.length === 0) {
-        alert('At least one role must keep permission to edit permissions');
-        return;
-      }
-    }
 
     if (hasIt) {
       rolePerms.splice(rolePerms.indexOf(perm), 1);
@@ -144,6 +139,15 @@ export default function Roles() {
         onSave={handleSave}
         saving={saving}
         error={saveError}
+      />
+
+      <ConfirmDialog
+        open={blocker.state === 'blocked'}
+        title="Leave without saving?"
+        body="You have unsaved changes. Leaving now will discard them."
+        confirmLabel="Leave"
+        onConfirm={() => blocker.proceed?.()}
+        onClose={() => blocker.reset?.()}
       />
     </div>
   );

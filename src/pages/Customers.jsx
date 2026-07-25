@@ -172,7 +172,10 @@ export default function Customers() {
         subtitle={drawerItem ? drawerItem.customer_id : undefined}
         onClose={handleDrawerClose}
       >
-        {drawerItem && !drawerItem.customer_id && (
+        {/* /orders only supports free-text search on order_id/customer_name (see
+            mock.js applyFilters) — customer_id isn't a searchable field there,
+            so the name is the identifier that actually returns this customer's orders. */}
+        {drawerItem && drawerItem.customer_id && (
           <CustomerOrdersList customerId={drawerItem.name} />
         )}
         <CustomerForm

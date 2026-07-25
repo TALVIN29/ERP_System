@@ -1,6 +1,3 @@
-import { useEffect } from 'react';
-import { gsap } from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import {
   LandingHeader,
   Hero,
@@ -11,34 +8,28 @@ import {
   LandingFooter,
 } from '../components/landing.jsx';
 
-gsap.registerPlugin(ScrollTrigger);
-
+// Each section kills the one ScrollTrigger it created. A page-level
+// getAll().kill() would also kill a sibling's trigger mid-StrictMode remount.
 export default function Landing() {
-  useEffect(() => {
-    return () => {
-      ScrollTrigger.getAll().forEach((trigger) => trigger.kill());
-    };
-  }, []);
-
   return (
     <div className="bg-[var(--surface-page)] text-[var(--text-primary)]">
       <LandingHeader />
       <Hero />
       <StatBand />
       <FeatureRow
-        image="https://images.unsplash.com/photo-qN7QYbKaW_w?auto=format&fit=crop&w=1600&q=70"
+        image="https://images.unsplash.com/photo-1587293852726-70cdb56c2866?auto=format&fit=crop&w=1600&q=70"
         title="Insight, not just charts"
         description="Every finding carries a recommended action. See the data, understand what to fix, act immediately."
         imagePosition="left"
       />
       <FeatureRow
-        image="https://images.unsplash.com/photo-7YVf6kGWwrw?auto=format&fit=crop&w=1600&q=70"
+        image="https://images.unsplash.com/photo-1586528116493-a029325540fa?auto=format&fit=crop&w=1600&q=70"
         title="Permissions you can see"
         description="Role-based access control is real. Build complex permission matrices and see them take effect instantly."
         imagePosition="right"
       />
       <FeatureRow
-        image="https://images.unsplash.com/photo-RyC0LfVrJQo?auto=format&fit=crop&w=1600&q=70"
+        image="https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=1600&q=70"
         title="No duplicate records, ever"
         description="Idempotent APIs ensure data integrity. Run the same request twice; one row is created."
         imagePosition="left"

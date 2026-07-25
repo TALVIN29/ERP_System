@@ -2,10 +2,13 @@ import { useEffect, useState } from 'react';
 import { useApi } from '../lib/useApi';
 import { PageHeader, Skeleton, ErrorState, Card, SeverityPill } from '../components/ui';
 import { InsightCard, ExportMenu } from '../components/insights';
+import { useAuth } from '../lib/auth';
 
 export default function Insights() {
   const { data, error, loading, refetch } = useApi('/insights');
   const insights = data?.insights;
+  const { perms } = useAuth();
+  const canExport = perms.can('insights', 'export');
 
   if (error) {
     return (
@@ -25,7 +28,7 @@ export default function Insights() {
   return (
     <div className="p-6">
       <PageHeader title="Insights" count={`${findingCount} finding${findingCount !== 1 ? 's' : ''}`}>
-        <ExportMenu canExport={true} />
+        <ExportMenu canExport={canExport} />
       </PageHeader>
 
       {loading ? (

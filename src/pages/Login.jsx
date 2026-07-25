@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, DEMO_CHIPS } from '../lib/auth.jsx';
-import { Button, TextField, InlineError } from '../components/ui.jsx';
+import { Button, TextField } from '../components/ui.jsx';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -56,7 +56,7 @@ export default function Login() {
       {/* Photo panel - hidden below 768px */}
       <div className="hidden md:flex flex-1 bg-black/80 relative overflow-hidden">
         <img
-          src="https://images.unsplash.com/photo-4oK8VEfPgGk?auto=format&fit=crop&w=800&q=70"
+          src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=800&q=70"
           alt="Warehouse inventory"
           className="absolute inset-0 w-full h-full object-cover opacity-60"
           loading="eager"
@@ -88,7 +88,7 @@ export default function Login() {
                 setError('');
               }}
               disabled={loading}
-              error={error ? '' : undefined}
+              error={error || undefined}
             />
             <TextField
               label="Password"
@@ -100,7 +100,7 @@ export default function Login() {
                 setError('');
               }}
               disabled={loading}
-              error={error ? '' : undefined}
+              error={error || undefined}
             />
             <Button
               ref={submitRef}
@@ -112,7 +112,6 @@ export default function Login() {
             >
               Sign in
             </Button>
-            {error && <InlineError>{error}</InlineError>}
           </form>
 
           <div className="my-6 border-t border-[var(--border-hairline)]" />

@@ -9,7 +9,9 @@ export default guard({
   action: 'read',
   run: async (supa, body, userId, method, url) => {
     const page = parseInt(url.searchParams.get('page') || '1');
-    const pageSize = Math.min(parseInt(url.searchParams.get('page_size') || '50'), 200);
+    // Everything else in the app uses `pageSize` (camelCase) — this used to read
+    // `page_size` and emit it back the same way, which the client never looked for.
+    const pageSize = Math.min(parseInt(url.searchParams.get('pageSize') || '50'), 200);
     const offset = (page - 1) * pageSize;
 
     let query = supa.from('audit_log').select('*', { count: 'exact' });
@@ -41,7 +43,7 @@ export default guard({
     return {
       rows: data || [],
       page,
-      page_size: pageSize,
+      pageSize,
       total: count || 0,
     };
   }

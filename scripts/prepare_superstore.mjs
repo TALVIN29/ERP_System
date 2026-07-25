@@ -57,8 +57,8 @@ function parseCSV(text) {
  * Run a small inline CSV sample.
  */
 function runSelfCheck() {
-  const sample = `"Order ID","Order Date","Ship Date","Ship Mode","Customer ID"
-"CA-2017-152156","2017-11-11","2017-11-20","Second Class","CU-135615"
+  const sample = `"Order ID","Order Date","Ship Date","Ship Mode","Customer Name"
+"CA-2017-152156","2017-11-11","2017-11-20","Second Class","Smith, John"
 "US-2017-100006","2017-01-30","2017-02-05","Standard Class","CU-145233"`;
 
   const rows = parseCSV(sample);
@@ -83,6 +83,13 @@ function runSelfCheck() {
     process.exit(1);
   }
 
+  // Check that a quoted comma stays inside one field instead of splitting it
+  const customerName = rows[1][4];
+  if (customerName !== 'Smith, John') {
+    console.error(`FAIL: Expected customerName 'Smith, John', got '${customerName}'`);
+    process.exit(1);
+  }
+
   console.log('✓ CSV parser self-check passed');
   process.exit(0);
 }
@@ -96,15 +103,16 @@ if (selfCheck) {
 const inputPath = path.join(process.cwd(), 'data', 'Superstore.csv');
 const outputDir = path.join(process.cwd(), 'data', 'out');
 
-// Create output directory if it doesn't exist
-if (!fs.existsSync(outputDir)) {
-  fs.mkdirSync(outputDir, { recursive: true });
-}
-
-// Read input CSV
+// Read input CSV first -- creating the output dir before this check left a
+// stray data/out/ behind on every failed run.
 if (!fs.existsSync(inputPath)) {
   console.error(`Error: ${inputPath} not found`);
   process.exit(1);
+}
+
+// Create output directory if it doesn't exist
+if (!fs.existsSync(outputDir)) {
+  fs.mkdirSync(outputDir, { recursive: true });
 }
 
 const csvText = fs.readFileSync(inputPath, 'utf-8');

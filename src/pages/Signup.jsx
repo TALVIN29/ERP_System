@@ -76,7 +76,7 @@ export default function Signup() {
         {/* Photo panel - hidden below 768px */}
         <div className="hidden md:flex flex-1 bg-black/80 relative overflow-hidden">
           <img
-            src="https://images.unsplash.com/photo-4oK8VEfPgGk?auto=format&fit=crop&w=800&q=70"
+            src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=800&q=70"
             alt="Warehouse inventory"
             className="absolute inset-0 w-full h-full object-cover opacity-60"
             loading="eager"
@@ -118,7 +118,7 @@ export default function Signup() {
       {/* Photo panel - hidden below 768px */}
       <div className="hidden md:flex flex-1 bg-black/80 relative overflow-hidden">
         <img
-          src="https://images.unsplash.com/photo-4oK8VEfPgGk?auto=format&fit=crop&w=800&q=70"
+          src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=800&q=70"
           alt="Warehouse inventory"
           className="absolute inset-0 w-full h-full object-cover opacity-60"
           loading="eager"

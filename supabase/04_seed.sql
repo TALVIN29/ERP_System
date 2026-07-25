@@ -1,6 +1,9 @@
 -- Seed RBAC: permissions, roles, role_permissions
 -- Also seed demo users and settings
 
+-- crypt()/gen_salt() below need pgcrypto; not created anywhere else.
+create extension if not exists pgcrypto;
+
 -- Modules: orders, products, customers, insights, users, roles, audit, settings
 -- Actions: read, create, update, delete, export
 
@@ -102,18 +105,36 @@ on conflict do nothing;
 -- Seed demo users in auth.users and profiles
 -- Note: In a real Supabase setup, user creation goes through auth endpoints,
 -- but for seeding we can insert directly with email_confirmed_at pre-set.
+-- instance_id/aud/role are required by GoTrue for password login to find the
+-- user at all, and an auth.identities row (provider='email') is required too --
+-- without it GoTrue returns "Invalid login credentials" even though the
+-- auth.users row exists.
 
 -- Admin
 insert into auth.users (
-  id, email, email_confirmed_at, encrypted_password, created_at, updated_at, raw_app_meta_data, raw_user_meta_data
+  instance_id, id, aud, role, email, email_confirmed_at, encrypted_password, created_at, updated_at, raw_app_meta_data, raw_user_meta_data
 ) values (
+  '00000000-0000-0000-0000-000000000000'::uuid,
   '00000000-0000-0000-0000-000000000001'::uuid,
+  'authenticated',
+  'authenticated',
   'admin@superstore.demo',
   now(),
   crypt('demo1234', gen_salt('bf')),
   now(), now(),
   '{"provider":"email","providers":["email"]}'::jsonb,
   '{}'::jsonb
+) on conflict do nothing;
+
+insert into auth.identities (
+  id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+) values (
+  '00000000-0000-0000-0000-000000000001'::uuid,
+  '00000000-0000-0000-0000-000000000001'::uuid,
+  'admin@superstore.demo',
+  jsonb_build_object('sub', '00000000-0000-0000-0000-000000000001', 'email', 'admin@superstore.demo'),
+  'email',
+  now(), now(), now()
 ) on conflict do nothing;
 
 insert into profiles (user_id, full_name, role_id, scope_regions, scope_categories) values (
@@ -126,15 +147,29 @@ insert into profiles (user_id, full_name, role_id, scope_regions, scope_categori
 
 -- Manager
 insert into auth.users (
-  id, email, email_confirmed_at, encrypted_password, created_at, updated_at, raw_app_meta_data, raw_user_meta_data
+  instance_id, id, aud, role, email, email_confirmed_at, encrypted_password, created_at, updated_at, raw_app_meta_data, raw_user_meta_data
 ) values (
+  '00000000-0000-0000-0000-000000000000'::uuid,
   '00000000-0000-0000-0000-000000000002'::uuid,
+  'authenticated',
+  'authenticated',
   'manager@superstore.demo',
   now(),
   crypt('demo1234', gen_salt('bf')),
   now(), now(),
   '{"provider":"email","providers":["email"]}'::jsonb,
   '{}'::jsonb
+) on conflict do nothing;
+
+insert into auth.identities (
+  id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+) values (
+  '00000000-0000-0000-0000-000000000002'::uuid,
+  '00000000-0000-0000-0000-000000000002'::uuid,
+  'manager@superstore.demo',
+  jsonb_build_object('sub', '00000000-0000-0000-0000-000000000002', 'email', 'manager@superstore.demo'),
+  'email',
+  now(), now(), now()
 ) on conflict do nothing;
 
 insert into profiles (user_id, full_name, role_id, scope_regions, scope_categories) values (
@@ -147,15 +182,29 @@ insert into profiles (user_id, full_name, role_id, scope_regions, scope_categori
 
 -- Analyst
 insert into auth.users (
-  id, email, email_confirmed_at, encrypted_password, created_at, updated_at, raw_app_meta_data, raw_user_meta_data
+  instance_id, id, aud, role, email, email_confirmed_at, encrypted_password, created_at, updated_at, raw_app_meta_data, raw_user_meta_data
 ) values (
+  '00000000-0000-0000-0000-000000000000'::uuid,
   '00000000-0000-0000-0000-000000000003'::uuid,
+  'authenticated',
+  'authenticated',
   'analyst@superstore.demo',
   now(),
   crypt('demo1234', gen_salt('bf')),
   now(), now(),
   '{"provider":"email","providers":["email"]}'::jsonb,
   '{}'::jsonb
+) on conflict do nothing;
+
+insert into auth.identities (
+  id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+) values (
+  '00000000-0000-0000-0000-000000000003'::uuid,
+  '00000000-0000-0000-0000-000000000003'::uuid,
+  'analyst@superstore.demo',
+  jsonb_build_object('sub', '00000000-0000-0000-0000-000000000003', 'email', 'analyst@superstore.demo'),
+  'email',
+  now(), now(), now()
 ) on conflict do nothing;
 
 insert into profiles (user_id, full_name, role_id, scope_regions, scope_categories) values (
@@ -168,15 +217,29 @@ insert into profiles (user_id, full_name, role_id, scope_regions, scope_categori
 
 -- Viewer
 insert into auth.users (
-  id, email, email_confirmed_at, encrypted_password, created_at, updated_at, raw_app_meta_data, raw_user_meta_data
+  instance_id, id, aud, role, email, email_confirmed_at, encrypted_password, created_at, updated_at, raw_app_meta_data, raw_user_meta_data
 ) values (
+  '00000000-0000-0000-0000-000000000000'::uuid,
   '00000000-0000-0000-0000-000000000004'::uuid,
+  'authenticated',
+  'authenticated',
   'viewer@superstore.demo',
   now(),
   crypt('demo1234', gen_salt('bf')),
   now(), now(),
   '{"provider":"email","providers":["email"]}'::jsonb,
   '{}'::jsonb
+) on conflict do nothing;
+
+insert into auth.identities (
+  id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+) values (
+  '00000000-0000-0000-0000-000000000004'::uuid,
+  '00000000-0000-0000-0000-000000000004'::uuid,
+  'viewer@superstore.demo',
+  jsonb_build_object('sub', '00000000-0000-0000-0000-000000000004', 'email', 'viewer@superstore.demo'),
+  'email',
+  now(), now(), now()
 ) on conflict do nothing;
 
 insert into profiles (user_id, full_name, role_id, scope_regions, scope_categories) values (
@@ -189,15 +252,29 @@ insert into profiles (user_id, full_name, role_id, scope_regions, scope_categori
 
 -- Finance
 insert into auth.users (
-  id, email, email_confirmed_at, encrypted_password, created_at, updated_at, raw_app_meta_data, raw_user_meta_data
+  instance_id, id, aud, role, email, email_confirmed_at, encrypted_password, created_at, updated_at, raw_app_meta_data, raw_user_meta_data
 ) values (
+  '00000000-0000-0000-0000-000000000000'::uuid,
   '00000000-0000-0000-0000-000000000005'::uuid,
+  'authenticated',
+  'authenticated',
   'finance@superstore.demo',
   now(),
   crypt('demo1234', gen_salt('bf')),
   now(), now(),
   '{"provider":"email","providers":["email"]}'::jsonb,
   '{}'::jsonb
+) on conflict do nothing;
+
+insert into auth.identities (
+  id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+) values (
+  '00000000-0000-0000-0000-000000000005'::uuid,
+  '00000000-0000-0000-0000-000000000005'::uuid,
+  'finance@superstore.demo',
+  jsonb_build_object('sub', '00000000-0000-0000-0000-000000000005', 'email', 'finance@superstore.demo'),
+  'email',
+  now(), now(), now()
 ) on conflict do nothing;
 
 insert into profiles (user_id, full_name, role_id, scope_regions, scope_categories) values (
@@ -210,15 +287,29 @@ insert into profiles (user_id, full_name, role_id, scope_regions, scope_categori
 
 -- Warehouse
 insert into auth.users (
-  id, email, email_confirmed_at, encrypted_password, created_at, updated_at, raw_app_meta_data, raw_user_meta_data
+  instance_id, id, aud, role, email, email_confirmed_at, encrypted_password, created_at, updated_at, raw_app_meta_data, raw_user_meta_data
 ) values (
+  '00000000-0000-0000-0000-000000000000'::uuid,
   '00000000-0000-0000-0000-000000000006'::uuid,
+  'authenticated',
+  'authenticated',
   'warehouse@superstore.demo',
   now(),
   crypt('demo1234', gen_salt('bf')),
   now(), now(),
   '{"provider":"email","providers":["email"]}'::jsonb,
   '{}'::jsonb
+) on conflict do nothing;
+
+insert into auth.identities (
+  id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+) values (
+  '00000000-0000-0000-0000-000000000006'::uuid,
+  '00000000-0000-0000-0000-000000000006'::uuid,
+  'warehouse@superstore.demo',
+  jsonb_build_object('sub', '00000000-0000-0000-0000-000000000006', 'email', 'warehouse@superstore.demo'),
+  'email',
+  now(), now(), now()
 ) on conflict do nothing;
 
 insert into profiles (user_id, full_name, role_id, scope_regions, scope_categories) values (

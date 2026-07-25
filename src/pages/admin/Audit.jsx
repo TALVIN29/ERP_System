@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { useApi } from '../../lib/useApi.js';
 import { useAuth } from '../../lib/auth.jsx';
@@ -151,7 +151,7 @@ export default function Audit() {
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <tbody key={row.id}>
+                  <Fragment key={row.id}>
                     <tr className="border-t border-[var(--border-hairline)] hover:bg-[var(--surface-sunken)]/40">
                       {columns.map((c) => (
                         <td key={c.key} className="px-3 py-2.5 text-[var(--text-primary)]">
@@ -169,7 +169,7 @@ export default function Audit() {
                                 <p className="text-[12px] text-[var(--text-muted)]">Record did not exist</p>
                               ) : (
                                 <div className="space-y-2">
-                                  <JsonDiff before={row.before} after={row.before} />
+                                  <JsonDiff value={row.before} compareTo={row.after} />
                                   <button
                                     onClick={() => navigator.clipboard.writeText(JSON.stringify(row.before, null, 2))}
                                     className="text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
@@ -185,7 +185,7 @@ export default function Audit() {
                                 <p className="text-[12px] text-[var(--text-muted)]">Record deleted</p>
                               ) : (
                                 <div className="space-y-2">
-                                  <JsonDiff before={row.before} after={row.after} />
+                                  <JsonDiff value={row.after} compareTo={row.before} />
                                   <button
                                     onClick={() => navigator.clipboard.writeText(JSON.stringify(row.after, null, 2))}
                                     className="text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
@@ -199,7 +199,7 @@ export default function Audit() {
                         </td>
                       </tr>
                     )}
-                  </tbody>
+                  </Fragment>
                 ))}
               </tbody>
             </table>

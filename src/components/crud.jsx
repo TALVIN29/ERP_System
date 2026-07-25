@@ -105,16 +105,22 @@ export function useCrudPage(endpoint, { columns = [], filterSchema = [], perms =
     }
   }, [endpoint, drawerItem, idempotencyKey]);
 
-  // Delete: confirm dialog
+  // Delete: confirm dialog. Mint the idempotency key ONCE, when the dialog
+  // opens, and reuse it for every attempt (including the products preflight
+  // probe below, which is itself a real DELETE) — a fresh key per retry would
+  // make the server treat a retried delete as a brand-new request. See
+  // docs/11-api-idempotency.md § 6.3.
   const handleDeleteClick = async (item) => {
     setConfirmItem(item);
     setDeleteReportMsg(null);
     setConfirmBlocked(false);
+    const key = newIdempotencyKey();
+    setIdempotencyKey(key);
 
     // Products: check for 409 and pre-report before asking
     if (endpoint === 'products') {
       try {
-        await api(`/${endpoint}`, { method: 'DELETE', body: item, idempotencyKey: newIdempotencyKey() });
+        await api(`/${endpoint}`, { method: 'DELETE', body: item, idempotencyKey: key });
       } catch (err) {
         if (err instanceof ApiError && err.status === 409) {
           setDeleteReportMsg(err.message);
@@ -129,17 +135,19 @@ export function useCrudPage(endpoint, { columns = [], filterSchema = [], perms =
     setConfirmOpen(true);
   };
 
-  // Delete: execute
+  // Delete: execute — reuses the key minted when the dialog opened so a retry
+  // after a failure is recognized as the same operation, not a duplicate.
   const handleConfirmDelete = useCallback(async () => {
     setConfirmLoading(true);
     try {
       await api(`/${endpoint}`, {
         method: 'DELETE',
         body: confirmItem,
-        idempotencyKey: newIdempotencyKey(),
+        idempotencyKey,
       });
       setConfirmOpen(false);
       setConfirmLoading(false);
+      setIdempotencyKey(null);
       setPage(1);
     } catch (err) {
       setConfirmLoading(false);
@@ -148,7 +156,7 @@ export function useCrudPage(endpoint, { columns = [], filterSchema = [], perms =
         setConfirmBlocked(true);
       }
     }
-  }, [endpoint, confirmItem]);
+  }, [endpoint, confirmItem, idempotencyKey]);
 
   return {
     // Data
@@ -242,9 +250,25 @@ export function OrderForm({ item, onSubmit, loading, error, scope }) {
     items: [],
   });
 
+  // The API never exposes product prices (see docs), so there's no lookup to
+  // derive unit price from — the honest fix is a unit-price input on each
+  // line, not a fake/guessed price. Sales per line = price * qty * (1 - disc).
+  const computedItems = formData.items.map((li) => {
+    const price = Number(li.unit_price) || 0;
+    const qty = Number(li.quantity) || 0;
+    const discount = Number(li.discount) || 0;
+    return { ...li, sales: Math.round(price * qty * (1 - discount) * 100) / 100 };
+  });
+  const lineTotal = computedItems.reduce((sum, li) => sum + li.sales, 0);
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    onSubmit({
+      ...formData,
+      items: computedItems,
+      lines: computedItems.length || 1,
+      sales: lineTotal,
+    });
   };
 
   const updateItem = (i, field, value) => {
@@ -260,11 +284,9 @@ export function OrderForm({ item, onSubmit, loading, error, scope }) {
   const addItem = () => {
     setFormData({
       ...formData,
-      items: [...formData.items, { product_id: '', quantity: 1, discount: 0 }],
+      items: [...formData.items, { product_id: '', quantity: 1, discount: 0, unit_price: 0 }],
     });
   };
-
-  const lineTotal = formData.items.reduce((sum, li) => sum + (li.sales || 0), 0);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -359,6 +381,16 @@ export function LineItemRepeater({ items, onUpdate, onRemove }) {
             value={item.quantity || 1}
             onChange={(e) => onUpdate(i, 'quantity', Number(e.target.value))}
             className="h-8 px-2 rounded-[var(--radius-sm)] bg-[var(--surface-card)] border border-[var(--border-hairline)] text-[12px] w-16"
+          />
+          <input
+            type="number"
+            placeholder="Unit price"
+            step="0.01"
+            min="0"
+            value={item.unit_price || 0}
+            onChange={(e) => onUpdate(i, 'unit_price', Number(e.target.value))}
+            className="h-8 px-2 rounded-[var(--radius-sm)] bg-[var(--surface-card)] border border-[var(--border-hairline)] text-[12px] w-20"
+            aria-label="Unit price"
           />
           <input
             type="number"

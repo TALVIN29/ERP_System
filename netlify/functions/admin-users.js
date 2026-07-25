@@ -3,7 +3,6 @@
  * List users and assign role, region/category scopes
  */
 import guard from './_lib/guard.js';
-import { writeAuditLog } from './_lib/audit.js';
 
 export default guard({
   module: 'users',
@@ -35,8 +34,7 @@ export default guard({
         .single();
       if (error) throw error;
 
-      await writeAuditLog(userId, 'update', 'users', body.user_id, before, data);
-      return { user: data };
+      return { user: data, __audit: { action: 'update', entity: 'users', entityId: body.user_id, before, after: data } };
     }
   }
 });

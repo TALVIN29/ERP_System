@@ -51,7 +51,10 @@ export function Hero() {
   useEffect(() => {
     if (isReducedMotion || !ref.current) return;
     const img = ref.current.querySelector('img');
-    gsap.to(img, {
+    // Kill only the ScrollTrigger THIS effect created — ScrollTrigger.getAll()
+    // would also kill FeatureRow/ScreenshotFrame's triggers under StrictMode's
+    // double-invoked effects (or any future sibling with a trigger).
+    const tween = gsap.to(img, {
       scrollTrigger: {
         trigger: ref.current,
         start: 'top top',
@@ -60,7 +63,10 @@ export function Hero() {
       },
       y: (i, el) => gsap.getProperty(el, 'offsetHeight') * 0.25,
     });
-    return () => ScrollTrigger.getAll().forEach((t) => t.kill());
+    return () => {
+      tween.scrollTrigger?.kill();
+      tween.kill();
+    };
   }, [isReducedMotion]);
 
   return (
@@ -69,7 +75,7 @@ export function Hero() {
       className="relative h-screen flex items-center justify-center overflow-hidden"
     >
       <img
-        src="https://images.unsplash.com/photo-4oK8VEfPgGk?auto=format&fit=crop&w=1920&q=70"
+        src="https://images.unsplash.com/photo-1553413077-190dd305871c?auto=format&fit=crop&w=1920&q=70"
         alt="Warehouse with shelving and inventory management"
         className="absolute inset-0 w-full h-full object-cover"
         onError={(e) => {
@@ -171,7 +177,10 @@ export function FeatureRow({ image, title, description, imagePosition = 'left' }
 
   useEffect(() => {
     if (isReducedMotion || !ref.current) return;
-    gsap.from(ref.current, {
+    // Kill only this instance's own trigger — a global getAll().kill() here
+    // strands every sibling FeatureRow/ScreenshotFrame's parallax under
+    // React.StrictMode's double-invoked effects.
+    const tween = gsap.from(ref.current, {
       scrollTrigger: {
         trigger: ref.current,
         start: 'top 80%',
@@ -181,7 +190,10 @@ export function FeatureRow({ image, title, description, imagePosition = 'left' }
       y: 24,
       duration: 0.5,
     });
-    return () => ScrollTrigger.getAll().forEach((t) => t.kill());
+    return () => {
+      tween.scrollTrigger?.kill();
+      tween.kill();
+    };
   }, [isReducedMotion]);
 
   const imageEl = (
@@ -227,7 +239,8 @@ export function ScreenshotFrame() {
 
   useEffect(() => {
     if (isReducedMotion || !ref.current) return;
-    gsap.from(ref.current, {
+    // Same fix as FeatureRow/Hero: kill only the trigger this effect made.
+    const tween = gsap.from(ref.current, {
       scrollTrigger: {
         trigger: ref.current,
         start: 'top 80%',
@@ -237,7 +250,10 @@ export function ScreenshotFrame() {
       y: 24,
       duration: 0.5,
     });
-    return () => ScrollTrigger.getAll().forEach((t) => t.kill());
+    return () => {
+      tween.scrollTrigger?.kill();
+      tween.kill();
+    };
   }, [isReducedMotion]);
 
   return (

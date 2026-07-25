@@ -1,10 +1,14 @@
-import { useRef, useState } from 'react';
-import { useChart } from './useChart';
-import { Card, TableView } from '../components/ui';
+import { useRef } from 'react';
+import { useChart, cssVar } from './useChart';
+import { Card, TableView, fmtCurrency } from '../components/ui';
+
+const tableColumns = [
+  { key: 'month', label: 'Month' },
+  { key: 'sales', label: 'Sales', numeric: true, render: (r) => fmtCurrency(r.sales) },
+];
 
 export function SalesTrendLine({ data = [] }) {
   const canvasRef = useRef(null);
-  const [showTable, setShowTable] = useState(false);
 
   const config = {
     type: 'line',
@@ -14,14 +18,14 @@ export function SalesTrendLine({ data = [] }) {
         {
           label: 'Sales',
           data: data.map((d) => d.sales),
-          borderColor: 'var(--series-1)',
+          borderColor: cssVar('--series-1'),
           backgroundColor: 'rgba(42, 120, 214, 0.05)',
           borderWidth: 2,
           fill: true,
           tension: 0.3,
           pointRadius: 0,
           pointHoverRadius: 6,
-          pointBackgroundColor: 'var(--series-1)',
+          pointBackgroundColor: cssVar('--series-1'),
           pointBorderColor: 'white',
           pointBorderWidth: 2,
         },
@@ -45,11 +49,11 @@ export function SalesTrendLine({ data = [] }) {
       scales: {
         y: {
           beginAtZero: true,
-          ticks: { color: 'var(--text-muted)' },
-          grid: { color: 'var(--gridline)' },
+          ticks: { color: cssVar('--text-muted') },
+          grid: { color: cssVar('--gridline') },
         },
         x: {
-          ticks: { color: 'var(--text-muted)' },
+          ticks: { color: cssVar('--text-muted') },
           grid: { display: false },
         },
       },
@@ -61,19 +65,16 @@ export function SalesTrendLine({ data = [] }) {
   return (
     <Card>
       <div className="p-6">
-        <h2 className="text-[13px] font-semibold text-[var(--text-primary)] mb-4" aria-label="Sales over time">
+        <h2 className="text-[13px] font-semibold text-[var(--text-primary)] mb-4">
           Sales over time
         </h2>
-        <canvas ref={canvasRef} style={{ maxHeight: '250px' }} />
-        <button
-          onClick={() => setShowTable(!showTable)}
-          className="text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] mt-4"
-        >
-          {showTable ? 'Hide' : 'View'} as table
-        </button>
-        {showTable && (
-          <TableView data={data} columns={['month', 'sales']} />
-        )}
+        <canvas
+          ref={canvasRef}
+          role="img"
+          aria-label="Line chart of monthly sales over time"
+          style={{ maxHeight: '250px' }}
+        />
+        <TableView columns={tableColumns} rows={data} label="View as table" />
       </div>
     </Card>
   );

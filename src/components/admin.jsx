@@ -36,8 +36,20 @@ export function PermissionMatrix({ roles, grants, original, loading, denied, onC
     return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
   });
 
+  // Per-cell, not per-role: only the toggled checkbox should light up.
   const isDirty = (roleKey, perm) => {
-    return original && JSON.stringify(grants[roleKey]) !== JSON.stringify(original[roleKey]);
+    return !!original && (grants[roleKey]?.includes(perm) ?? false) !== (original[roleKey]?.includes(perm) ?? false);
+  };
+
+  // A cell would break the lockout when it's the last surviving roles.update
+  // grant across all roles — toggling it off would leave nobody able to edit
+  // permissions, including themselves out of fixing it.
+  const wouldBreakLockout = (roleKey, module, action) => {
+    if (module !== 'roles' || action !== 'update') return false;
+    const perm = 'roles.update';
+    if (!grants[roleKey]?.includes(perm)) return false;
+    const holders = sortedRoles.filter((r) => grants[r.key]?.includes(perm));
+    return holders.length === 1 && holders[0].key === roleKey;
   };
 
   if (mobile) {
@@ -67,7 +79,7 @@ export function PermissionMatrix({ roles, grants, original, loading, denied, onC
         <tbody>
           {MODULES.map((m) => (
             <tr key={m} className="border-t border-[var(--border-hairline)]">
-              <td className="sticky left-0 z-10 bg-[var(--surface-card)] px-3 py-2.5 font-medium text-[var(--text-primary)] border-r border-[var(--border-hairline)]">{m}</td>
+              <th scope="row" className="sticky left-0 z-10 bg-[var(--surface-card)] px-3 py-2.5 text-left font-medium text-[var(--text-primary)] border-r border-[var(--border-hairline)]">{m}</th>
               {sortedRoles.map((r) => (
                 <td key={r.key} className="px-2 py-2.5 text-center border-r border-[var(--border-hairline)] hover:bg-[var(--surface-sunken)]/40 transition-colors">
                   <div className="flex justify-center gap-1">
@@ -80,6 +92,7 @@ export function PermissionMatrix({ roles, grants, original, loading, denied, onC
                         granted={grants[r.key]?.includes(`${m}.${a}`)}
                         disabled={denied}
                         isDirty={isDirty(r.key, `${m}.${a}`)}
+                        lockout={wouldBreakLockout(r.key, m, a)}
                         onChange={() => onChange(r.key, m, a)}
                       />
                     ))}
@@ -98,8 +111,16 @@ function MobileMatrix({ roles, grants, original, denied, onChange }) {
   const [selected, setSelected] = useState(roles[0]?.key);
   const role = roles.find((r) => r.key === selected);
 
-  const isDirty = (roleKey) => {
-    return original && JSON.stringify(grants[roleKey]) !== JSON.stringify(original[roleKey]);
+  const isDirty = (roleKey, perm) => {
+    return !!original && (grants[roleKey]?.includes(perm) ?? false) !== (original[roleKey]?.includes(perm) ?? false);
+  };
+
+  const wouldBreakLockout = (roleKey, module, action) => {
+    if (module !== 'roles' || action !== 'update') return false;
+    const perm = 'roles.update';
+    if (!grants[roleKey]?.includes(perm)) return false;
+    const holders = roles.filter((r) => grants[r.key]?.includes(perm));
+    return holders.length === 1 && holders[0].key === roleKey;
   };
 
   return (
@@ -124,7 +145,8 @@ function MobileMatrix({ roles, grants, original, denied, onChange }) {
                     role={role}
                     granted={grants[role.key]?.includes(`${m}.${a}`)}
                     disabled={denied}
-                    isDirty={isDirty(role.key)}
+                    isDirty={isDirty(role.key, `${m}.${a}`)}
+                    lockout={wouldBreakLockout(role.key, m, a)}
                     onChange={() => onChange(role.key, m, a)}
                   />
                 ))}
@@ -137,12 +159,17 @@ function MobileMatrix({ roles, grants, original, denied, onChange }) {
   );
 }
 
-export function MatrixCell({ module, action, role, granted, disabled, isDirty, onChange }) {
+export function MatrixCell({ module, action, role, granted, disabled, isDirty, lockout, onChange }) {
   const ref = useRef(null);
-  const locked = isLocked(module, action);
+  const systemLocked = isLocked(module, action);
+  // A lockout cell renders exactly like a system-locked one: non-interactive,
+  // icon + tooltip, no onChange ever fires. Only the reason differs.
+  const locked = systemLocked || lockout;
 
-  const tooltip = locked
+  const tooltip = systemLocked
     ? 'Audit records are written by the system and cannot be created or modified.'
+    : lockout
+    ? 'At least one role must keep permission to edit permissions.'
     : `${role.name} can ${action} ${module}.`;
 
   if (locked) {
@@ -158,13 +185,27 @@ export function MatrixCell({ module, action, role, granted, disabled, isDirty, o
     );
   }
 
+  const handleChange = (e) => {
+    onChange(e);
+    // Small pulse for feedback on toggle; skipped entirely under
+    // prefers-reduced-motion per ui.jsx's reducedMotion().
+    if (!reducedMotion() && ref.current) {
+      anime({
+        targets: ref.current,
+        scale: [1, 1.35, 1],
+        duration: 220,
+        easing: 'easeOutQuad',
+      });
+    }
+  };
+
   return (
     <div className="relative">
       <input
         ref={ref}
         type="checkbox"
         checked={granted}
-        onChange={onChange}
+        onChange={handleChange}
         disabled={disabled}
         title={tooltip}
         aria-label={tooltip}
@@ -282,55 +323,35 @@ export function ScopePreview({ regions, categories, total, matched, loading }) {
   );
 }
 
-export function JsonDiff({ before, after }) {
-  const [expanded, setExpanded] = useState({});
-
-  const unchanged = new Set();
-  const changed = new Set();
-
-  if (after) {
-    Object.keys(after).forEach((k) => {
-      if (JSON.stringify(before?.[k]) === JSON.stringify(after[k])) {
-        unchanged.add(k);
-      } else {
-        changed.add(k);
-      }
-    });
-    if (before) {
-      Object.keys(before).forEach((k) => {
-        if (!(k in (after || {}))) changed.add(k);
-      });
-    }
-  } else if (before) {
-    Object.keys(before).forEach((k) => changed.add(k));
-  }
-
-  const allKeys = Array.from(new Set([...Object.keys(before || {}), ...Object.keys(after || {})])).sort();
+/**
+ * One-sided: lists `value`'s own key/value pairs plainly (no expand/collapse,
+ * per the wireframe), highlighting keys that differ from `compareTo` (the
+ * other side of the audit row). Used for both the Before and After columns —
+ * each renders its own values, diffed against the other for the highlight.
+ */
+export function JsonDiff({ value, compareTo }) {
+  const keys = Object.keys(value || {}).sort();
 
   return (
-    <div className="space-y-2 text-[12px]">
-      {allKeys.filter((k) => changed.has(k)).map((k) => (
-        <div key={k} className="flex gap-2 p-2 bg-[var(--surface-sunken)] rounded-[var(--radius-sm)]">
-          <div className="font-medium text-[var(--status-warning)]">{k}</div>
-          <div className="flex-1" />
-          <code className="text-[var(--text-muted)]">
-            {JSON.stringify(before?.[k])} → {JSON.stringify(after?.[k])}
-          </code>
-        </div>
-      ))}
-      {unchanged.size > 0 && (
-        <button
-          onClick={() => setExpanded((e) => ({ ...e, show: !e.show }))}
-          className="text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-        >
-          {expanded.show ? '▼' : '▶'} Show {unchanged.size} unchanged field{unchanged.size === 1 ? '' : 's'}
-        </button>
-      )}
-      {expanded.show && allKeys.filter((k) => unchanged.has(k)).map((k) => (
-        <div key={k} className="text-[var(--text-muted)] p-2">
-          <span className="font-medium">{k}</span>: <code>{JSON.stringify(after?.[k])}</code>
-        </div>
-      ))}
+    <div className="space-y-1 text-[12px]">
+      {keys.map((k) => {
+        const changed = JSON.stringify(value[k]) !== JSON.stringify(compareTo?.[k]);
+        return (
+          <div
+            key={k}
+            className={cx(
+              'flex gap-2 p-2 rounded-[var(--radius-sm)]',
+              changed && 'bg-[var(--surface-sunken)]'
+            )}
+          >
+            <div className={changed ? 'font-medium text-[var(--status-warning)]' : 'font-medium text-[var(--text-secondary)]'}>
+              {k}
+            </div>
+            <div className="flex-1" />
+            <code className="text-[var(--text-muted)]">{JSON.stringify(value[k])}</code>
+          </div>
+        );
+      })}
     </div>
   );
 }
