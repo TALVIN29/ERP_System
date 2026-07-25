@@ -5,12 +5,11 @@
 -- through RLS: two full policy-evaluated passes over the whole table to return
 -- four region names and three category names.
 --
--- The function's whole purpose is to report every value that EXISTS in the
--- dataset (the Users screen offers them when assigning a scope, and list pages
--- use them as the "no scope = all" fallback), so reading it through the
--- caller's own scope was wrong as well as slow: a scoped user's dropdown could
--- never have offered anything outside their scope anyway, and the admin screen
--- needs the full list.
+-- Its purpose is to report every value that EXISTS in the dataset, which
+-- _lib/scope.js uses as the "no scope means all" fallback. Nothing changes for
+-- a scoped user: they get their profile's own regions either way. And nothing
+-- changes for an unscoped one either, because RLS was already returning them
+-- everything. Only the cost changes.
 --
 -- It exposes no figures — only the distinct labels — so SECURITY DEFINER here
 -- widens nothing that the Regions/Categories filter did not already show.

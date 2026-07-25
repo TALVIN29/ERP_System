@@ -8,6 +8,20 @@ import { scopeOptions } from './_lib/scope.js';
 
 const FILTER_FIELDS = ['region', 'category', 'sub_category', 'segment', 'state'];
 
+/**
+ * The search term is interpolated into a PostgREST filter expression, where
+ * `,` separates terms, `.` separates operands and `()` delimits the logic tree.
+ * A raw term containing those does not just break the query — it lets the
+ * caller append filters of their own choosing to it.
+ *
+ * RLS still stands behind this, so it was never a route to another tenant's
+ * rows, but a filter the caller controls is not something to hand out. Keep
+ * what a real order id or customer name contains and drop the rest.
+ */
+function sanitizeSearch(raw) {
+  return (raw || '').trim().replace(/[^\w\s@.'-]/g, '').replace(/\./g, ' ').slice(0, 80).trim();
+}
+
 export default guard({
   module: 'orders',
   action: 'read',
@@ -19,10 +33,29 @@ export default guard({
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
-      let query = supa.from('orders').select('*', { count: 'exact' });
+      // orders has no customer_name column — the name lives on customers. The
+      // fixture backend denormalises it (mock.js line 82), so the Customer
+      // column looked populated in development and was empty against the real
+      // database, and searching it returned 500 (42703) for every query.
+      let query = supa
+        .from('orders')
+        .select('*, customers(name)', { count: 'exact' });
 
-      const q = (params.get('q') || '').trim();
-      if (q) query = query.or(`order_id.ilike.%${q}%,customer_name.ilike.%${q}%`);
+      const q = sanitizeSearch(params.get('q'));
+      if (q) {
+        // A top-level `or` cannot reference an embedded table (PostgREST parses
+        // `customers.name` inside or() as a malformed logic tree), so resolve
+        // the names to ids first and match on those. One extra round trip, and
+        // only when the user is actually searching.
+        const { data: matches } = await supa
+          .from('customers').select('customer_id').ilike('name', `%${q}%`).limit(500);
+        const ids = (matches || []).map((c) => c.customer_id);
+        query = query.or(
+          ids.length
+            ? `order_id.ilike.%${q}%,customer_id.in.(${ids.join(',')})`
+            : `order_id.ilike.%${q}%`
+        );
+      }
 
       for (const field of FILTER_FIELDS) {
         const v = params.get(field);
@@ -49,7 +82,13 @@ export default guard({
       ]);
       if (error) throw error;
 
-      return { rows: data || [], total: count || 0, page, pageSize, scope };
+      // Flatten the embed to the shape the table renders and mock.js returns.
+      const rows = (data || []).map(({ customers, ...o }) => ({
+        ...o,
+        customer_name: customers?.name ?? '',
+      }));
+
+      return { rows, total: count || 0, page, pageSize, scope };
     }
 
     if (method === 'POST') {
