@@ -5,7 +5,6 @@
  * not an echo of whatever the client happened to send.
  */
 import guard from './_lib/guard.js';
-import { serviceClient } from './_lib/supa.js';
 
 async function readScope(supa, scope) {
   const { data, error } = await supa.from('settings').select('key, value').eq('scope', scope);
@@ -15,27 +14,26 @@ async function readScope(supa, scope) {
   return map;
 }
 
-async function canEditOrg(userId) {
-  // Mirrors mock.js: only an admin holding settings.update may edit org settings.
-  // Read via the service client because this is a permission LOOKUP for rendering
-  // a flag, the same kind of bookkeeping guard.js itself does — not a data read
-  // that should be subject to RLS.
-  const { data: profile } = await serviceClient.from('profiles').select('role_id').eq('user_id', userId).single();
-  if (!profile) return false;
-  const { data: role } = await serviceClient.from('roles').select('key').eq('id', profile.role_id).single();
-  const { data: grants } = await serviceClient
-    .from('role_permissions').select('permissions(module, action)').eq('role_id', profile.role_id);
-  const hasUpdate = (grants || []).some((g) => g.permissions.module === 'settings' && g.permissions.action === 'update');
-  return role?.key === 'admin' && hasUpdate;
-}
-
 export default guard({
   module: 'settings',
   action: 'read',
-  run: async (supa, body, userId, method, url) => {
+  run: async (supa, body, userId, method, url, grants) => {
     if (method === 'GET') {
       const [org, user] = await Promise.all([readScope(supa, 'org'), readScope(supa, userId)]);
-      return { org, user, canEditOrg: await canEditOrg(userId) };
+      // canEditOrg is a UI flag, and it now answers with the grants the guard
+      // already loaded rather than re-deriving them.
+      //
+      // It used to walk profiles -> roles -> role_permissions in three
+      // SEQUENTIAL round trips, which measured as the whole 876ms this handler
+      // was spending.
+      //
+      // It also required role.key === 'admin' on top of the permission, and
+      // that was wrong in a way the delay was hiding: PUT is gated by the guard
+      // on settings.update alone, so a non-admin role granted settings.update
+      // could already write org settings while this flag told the UI it could
+      // not. The permission matrix is what decides — that is the entire point
+      // of making it editable — so the flag now matches what the API enforces.
+      return { org, user, canEditOrg: grants.has('settings.update') };
     }
 
     if (method === 'PUT') {

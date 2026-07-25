@@ -600,7 +600,10 @@ async function route(path, params, method, body) {
   if (path === '/settings') {
     if (method === 'GET') {
       requirePerm('settings', 'read');
-      return { org: state.settings.org, user: state.settings.user, canEditOrg: permissionsFor(s.profile.role_key).includes('settings.update') && s.profile.role_key === 'admin' };
+      // Matches netlify/functions/settings.js: the permission decides, not the
+      // role name. The extra role_key === 'admin' that used to be here
+      // contradicted the real PUT gate, which checks settings.update alone.
+      return { org: state.settings.org, user: state.settings.user, canEditOrg: permissionsFor(s.profile.role_key).includes('settings.update') };
     }
     if (method === 'PUT') {
       requirePerm('settings', 'update');

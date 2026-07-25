@@ -8,6 +8,8 @@
  * 6. Execute + store + audit
  *
  * Each endpoint passes { module, action, run } to guard(), which wraps the handler.
+ * run() receives (supa, body, userId, method, url, grants) — `grants` being the
+ * Set of "module.action" strings step 5 already read from the database.
  * `action` is what step 5 checks for GET; mutating verbs map to create/update/delete
  * below so a CRUD endpoint only has to declare its read-side pair once.
  */
@@ -253,7 +255,9 @@ export default function guard({ module, action, run }) {
       // Step 6: Execute + store + audit
       let response, httpStatus = 200;
       try {
-        response = await t.track('handler', run(supa, body, userId, method, url));
+        // `grants` is handed down so a handler never re-reads what the guard
+        // already loaded to make its own decision.
+        response = await t.track('handler', run(supa, body, userId, method, url, grants));
         if (method === 'POST') httpStatus = 201;
       } catch (err) {
         // Release idempotency key on handler error — a failed request must not be

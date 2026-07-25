@@ -155,7 +155,9 @@ test.describe('settings', () => {
     await signIn(page, 'viewer@superstore.demo');
     await page.goto('/app/settings');
     await settled(page);
-    await expect(page.getByText(/only administrators can change/i)).toBeVisible();
+    // The gate is the settings.update permission, not the role's name — that is
+    // what the API actually enforces on PUT, so it is what the UI now says.
+    await expect(page.getByText(/does not have the settings\.update permission/i)).toBeVisible();
   });
 });
 

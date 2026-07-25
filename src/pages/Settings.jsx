@@ -215,7 +215,7 @@ export default function Settings() {
 
       <SettingsCard
         title="Organisation"
-        description={canEditOrg ? undefined : 'Admin only'}
+        description={canEditOrg ? undefined : 'Requires the settings.update permission'}
       >
         <div className="space-y-4">
           <TextField
@@ -300,7 +300,7 @@ export default function Settings() {
 
           {!canEditOrg && (
             <p className="text-[12px] text-[var(--text-muted)]">
-              Only administrators can change these settings.
+              Your role does not have the settings.update permission.
             </p>
           )}
         </div>
