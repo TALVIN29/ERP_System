@@ -11,16 +11,23 @@
  * `action` is what step 5 checks for GET; mutating verbs map to create/update/delete
  * below so a CRUD endpoint only has to declare its read-side pair once.
  */
-import { serviceClient, anonClient, userClient } from './supa.js';
+import { serviceClient, anonClient, userClient, projectConfig } from './supa.js';
+import { verifyLocally } from './jwt.js';
 import { checkRateLimit } from './ratelimit.js';
 import { hashBody, checkIdempotency, storeIdempotencyResponse, releaseIdempotencyKey, checkContentDedup, storeContentDedupResponse } from './idempotency.js';
 import { writeAuditLog } from './audit.js';
 
 /**
- * Verify the bearer token against Supabase Auth itself — never trust a locally
- * decoded payload. auth.getUser(token) round-trips to the Auth server and
- * confirms the signature and expiry; only its returned user is trustworthy.
- * Returns the verified user ({id, email, ...}) or throws a 401.
+ * Verify the bearer token's SIGNATURE — never trust a locally decoded payload.
+ * Decoding is not verifying, and that distinction is the whole trust boundary.
+ *
+ * Preferred path checks the ES256 signature against the project's published
+ * JWKS inside this function (see _lib/jwt.js): the same cryptographic check the
+ * Auth server would do, minus an HTTPS round trip that every later step had to
+ * queue behind. Falls back to auth.getUser(token) for tokens that cannot be
+ * verified from a public key.
+ *
+ * Returns the verified user ({id, email}) or throws a 401.
  */
 async function verifyJWT(bearerToken) {
   if (!bearerToken || !bearerToken.startsWith('Bearer ')) {
@@ -31,15 +38,27 @@ async function verifyJWT(bearerToken) {
   }
 
   const token = bearerToken.slice(7);
-  const { data, error } = await anonClient().auth.getUser(token);
 
+  let claims = null;
+  try {
+    claims = await verifyLocally(token, projectConfig);
+  } catch (err) {
+    // The token was verifiable and failed: bad signature, expired, wrong
+    // issuer. That is a decided 401 — do not soften it by asking the server.
+    if (err.status === 401) throw err;
+    // A JWKS fetch or parse problem is our failure, not the caller's; fall
+    // through to the remote check rather than locking everyone out.
+    claims = null;
+  }
+  if (claims) return { id: claims.sub, email: claims.email };
+
+  const { data, error } = await anonClient().auth.getUser(token);
   if (error || !data?.user) {
     const err = new Error('Invalid or expired session. Please sign in again.');
     err.status = 401;
     err.code = 'invalid_jwt';
     throw err;
   }
-
   return data.user;
 }
 

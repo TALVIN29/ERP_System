@@ -41,10 +41,15 @@ export default guard({
 
       // RLS applies the scope wall on top of these filters (region/category scope
       // is per-row, enforced identically to every other module).
-      const { data, count, error } = await query.range(from, to);
+      // The scope options do not depend on the page, so they go out at the same
+      // time rather than after it.
+      const [{ data, count, error }, scope] = await Promise.all([
+        query.range(from, to),
+        scopeOptions(supa, userId),
+      ]);
       if (error) throw error;
 
-      return { rows: data || [], total: count || 0, page, pageSize, scope: await scopeOptions(supa, userId) };
+      return { rows: data || [], total: count || 0, page, pageSize, scope };
     }
 
     if (method === 'POST') {

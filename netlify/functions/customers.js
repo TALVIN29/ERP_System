@@ -16,11 +16,13 @@ export default guard({
     if (method === 'GET') {
       const params = url.searchParams;
 
-      const [{ data: customers, error: e1 }, { data: orders, error: e2 }] = await Promise.all([
+      const [{ data: customers, error: e1 }, { data: orders, error: e2 }, scope] = await Promise.all([
         supa.from('customers').select('*'),
         // order_items denormalizes sales at line level; use orders for a per-order sales
         // figure by summing its lines, since orders has no `sales` column of its own.
         supa.from('order_items').select('order_id, sales, orders!inner(customer_id)'),
+        // Independent of both, so it rides along instead of following them.
+        scopeOptions(supa, userId),
       ]);
       if (e1) throw e1;
       if (e2) throw e2;
@@ -45,10 +47,7 @@ export default guard({
       });
 
       rows = applyFilters(rows, params, ['customer_id', 'name']);
-      return {
-        ...paginate(sortRows(rows, params), params),
-        scope: await scopeOptions(supa, userId),
-      };
+      return { ...paginate(sortRows(rows, params), params), scope };
     }
 
     if (method === 'POST') {

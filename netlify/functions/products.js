@@ -16,10 +16,12 @@ export default guard({
     if (method === 'GET') {
       const params = url.searchParams;
 
-      const [{ data: products, error: e1 }, { data: items, error: e2 }] = await Promise.all([
+      const [{ data: products, error: e1 }, { data: items, error: e2 }, scope] = await Promise.all([
         supa.from('products').select('*'),
         // order_items carries scope columns directly, so RLS scoping applies here too.
         supa.from('order_items').select('product_id, sales'),
+        // Independent of both, so it rides along instead of following them.
+        scopeOptions(supa, userId),
       ]);
       if (e1) throw e1;
       if (e2) throw e2;
@@ -38,10 +40,7 @@ export default guard({
       });
 
       rows = applyFilters(rows, params, ['product_id', 'name']);
-      return {
-        ...paginate(sortRows(rows, params), params),
-        scope: await scopeOptions(supa, userId),
-      };
+      return { ...paginate(sortRows(rows, params), params), scope };
     }
 
     if (method === 'POST') {

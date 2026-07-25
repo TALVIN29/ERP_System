@@ -36,10 +36,18 @@ export const serviceClient = createClient(url, serviceKey);
 
 /**
  * Anon-key client used ONLY to verify a bearer token via supabase.auth.getUser(token).
- * That call round-trips to Supabase Auth and confirms the signature/expiry; it is the
- * one legitimate way to trust a JWT's claims. Never construct the "authenticated user"
- * from a locally base64-decoded payload.
+ * That call round-trips to Supabase Auth and confirms the signature/expiry.
+ *
+ * It is now the FALLBACK path: _lib/jwt.js checks the ES256 signature against
+ * the project's published JWKS without leaving the function, which is the same
+ * cryptographic check without the round trip. This still runs for tokens that
+ * cannot be verified from a public key (a legacy HS256 project). Never
+ * construct the "authenticated user" from a locally base64-decoded payload —
+ * decoding is not verifying.
  */
 export function anonClient() {
   return createClient(url, anonKey);
 }
+
+/** The values _lib/jwt.js needs to fetch and pin the JWKS. */
+export const projectConfig = { supabaseUrl: url, anonKey };
