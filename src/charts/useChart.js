@@ -1,4 +1,12 @@
 import { useEffect, useRef } from 'react';
+import { Chart, registerables } from 'chart.js';
+
+// `chart.js` ships tree-shakeable: nothing is registered until you ask for it,
+// so `new Chart(...)` throws "linear is not a registered scale" / "doughnut is
+// not a registered controller". Register once at module load rather than per
+// chart. (Importing 'chart.js/auto' would do the same but pulls in every
+// controller implicitly, which is harder to notice when trimming later.)
+Chart.register(...registerables);
 
 /**
  * Chart.js draws to a <canvas> — CanvasRenderingContext2D.fillStyle/strokeStyle
@@ -12,10 +20,13 @@ export function cssVar(name) {
 }
 
 /**
- * ONE small hook wrapping Chart.js. Creates the chart, destroys on unmount,
- * and RE-READS the CSS custom properties and updates when `document.documentElement.dataset.theme`
- * changes. Chart.js does not re-read CSS custom properties on its own — this hook is
- * the only place that concern lives.
+ * ONE small hook wrapping Chart.js. Creates the chart, destroys it on unmount,
+ * and rebuilds it when `data-theme` flips on <html> — Chart.js does not re-read
+ * CSS custom properties on its own, so this hook is the only place that
+ * concern lives.
+ *
+ * `config` is expected to be memoised by the caller; an inline object literal
+ * would rebuild the chart on every render.
  */
 export function useChart(canvasRef, config) {
   const chartRef = useRef(null);
@@ -23,44 +34,31 @@ export function useChart(canvasRef, config) {
   useEffect(() => {
     if (!canvasRef.current || !config) return;
 
-    const createChart = async () => {
-      const { Chart } = await import('chart.js');
+    const build = () => {
       if (chartRef.current) chartRef.current.destroy();
       chartRef.current = new Chart(canvasRef.current, config);
     };
 
-    createChart();
+    build();
 
-    return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
-      }
-    };
-  }, [config, canvasRef]);
-
-  // Re-read CSS custom properties on theme change
-  useEffect(() => {
     const observer = new MutationObserver(() => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
-
-        const createChart = async () => {
-          const { Chart } = await import('chart.js');
-          chartRef.current = new Chart(canvasRef.current, config);
-        };
-
-        createChart();
-      }
+      // The config closes over cssVar() values read at render time, so the
+      // caller re-renders on theme change too; rebuilding here covers the
+      // canvas itself, which cannot repaint from CSS.
+      if (canvasRef.current) build();
     });
-
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ['data-theme'],
     });
 
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (chartRef.current) {
+        chartRef.current.destroy();
+        chartRef.current = null;
+      }
+    };
   }, [config, canvasRef]);
 
   return chartRef;
