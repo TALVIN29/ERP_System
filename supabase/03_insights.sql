@@ -226,17 +226,27 @@ rule_5 as (
     'evidence', jsonb_build_object('type', 'table')
   ) as finding
   from (
+    -- Per-product totals have to land in their own CTE first. Rolling them up
+    -- across products in the same select would nest one aggregate inside
+    -- another, which Postgres rejects.
+    with product_profit as (
+      select
+        p.name,
+        sum(oi.profit) as profit,
+        count(*) as lines
+      from order_items oi
+      join products p on oi.product_id = p.product_id
+      where in_scope(oi.region, oi.category)
+      group by p.product_id, p.name
+      having sum(oi.profit) < 0
+    )
     select
       count(*) as loser_count,
-      (array_agg(p.name order by sum(oi.profit) asc))[1] as worst_name,
-      abs((array_agg(sum(oi.profit) order by sum(oi.profit) asc))[1]) as worst_loss,
-      (array_agg(count(*) order by sum(oi.profit) asc))[1]::text as worst_lines,
-      sum(sum(oi.profit)) as total_loss
-    from order_items oi
-    join products p on oi.product_id = p.product_id
-    where in_scope(oi.region, oi.category)
-    group by p.product_id, p.name
-    having sum(oi.profit) < 0
+      (array_agg(name order by profit asc))[1] as worst_name,
+      abs((array_agg(profit order by profit asc))[1]) as worst_loss,
+      (array_agg(lines order by profit asc))[1]::text as worst_lines,
+      sum(profit) as total_loss
+    from product_profit
   ) t
   where loser_count > 0
 ),
@@ -268,14 +278,32 @@ rule_6 as (
       where in_scope(oi.region, oi.category)
       group by oi.region, date_trunc('month', o.order_date)::date
     )
+    -- Rank the months first, then aggregate over the ranks. Slicing an
+    -- array_agg and averaging it nests one aggregate inside another, and
+    -- avg() takes a set of rows, never an array.
+    ranked_months as (
+      select
+        region,
+        sales,
+        row_number() over (partition by region order by month desc) as rn
+      from monthly_sales
+    ),
+    region_trend as (
+      select
+        region,
+        max(sales) filter (where rn = 1) as current_month_sales,
+        avg(sales) filter (where rn between 2 and 4) as trend_avg
+      from ranked_months
+      where rn <= 4
+      group by region
+    )
     select
       region,
-      (array_agg(sales order by month desc))[1]::numeric as current_month_sales,
-      avg((array_agg(sales order by month desc))[2:4]) as trend_avg,
-      round(100 * (1 - (array_agg(sales order by month desc))[1] / avg((array_agg(sales order by month desc))[2:4])))::int as pct_below
-    from monthly_sales
-    group by region
-    having avg((array_agg(sales order by month desc))[2:4]) > 0
+      current_month_sales,
+      trend_avg,
+      round(100 * (1 - current_month_sales / trend_avg))::int as pct_below
+    from region_trend
+    where trend_avg > 0 and current_month_sales is not null
   ) t
   where pct_below > 15
 ),
