@@ -78,7 +78,7 @@ $$;
 SQL
 
 fail=0
-for f in supabase/01_schema.sql supabase/02_rls.sql supabase/03_insights.sql supabase/04_seed.sql supabase/05_metrics.sql supabase/06_grants.sql supabase/07_perf.sql supabase/08_perf2.sql; do
+for f in supabase/01_schema.sql supabase/02_rls.sql supabase/03_insights.sql supabase/04_seed.sql supabase/05_metrics.sql supabase/06_grants.sql supabase/07_perf.sql supabase/08_perf2.sql supabase/09_insights_perf.sql; do
   echo
   echo "=== $f ==="
   if run -q < "$f"; then
@@ -261,7 +261,7 @@ SQL
 
   echo
   echo "=== re-run idempotency: all four again ==="
-  for f in supabase/01_schema.sql supabase/02_rls.sql supabase/03_insights.sql supabase/04_seed.sql supabase/05_metrics.sql supabase/06_grants.sql supabase/07_perf.sql supabase/08_perf2.sql; do
+  for f in supabase/01_schema.sql supabase/02_rls.sql supabase/03_insights.sql supabase/04_seed.sql supabase/05_metrics.sql supabase/06_grants.sql supabase/07_perf.sql supabase/08_perf2.sql supabase/09_insights_perf.sql; do
     run -q < "$f" >/dev/null 2>&1 && echo "  $f OK" || { echo "  $f FAILED ON RERUN"; fail=1; }
   done
 fi
