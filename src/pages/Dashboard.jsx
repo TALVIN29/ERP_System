@@ -34,17 +34,20 @@ function KpiTile({ kpi, scope }) {
       return;
     }
 
-    // Animate from previous value to current
-    const startValue = previousValue.current;
+    // Count from the PREVIOUS value, not from zero — the direction of that
+    // movement is information. anime.js reports progress as 0-100, so the
+    // counter object is tweened and read directly rather than scaled by it.
+    const counter = { v: previousValue.current };
     anime({
-      targets: { v: startValue },
+      targets: counter,
       v: kpi.value,
       duration: 800,
       easing: 'easeOutExpo',
-      update: (anim) => {
-        if (valueRef.current) {
-          valueRef.current.textContent = formatValue(Math.round(anim.progress * (kpi.value - startValue) + startValue), kpi.format);
-        }
+      update: () => {
+        if (valueRef.current) valueRef.current.textContent = formatValue(counter.v, kpi.format);
+      },
+      complete: () => {
+        if (valueRef.current) valueRef.current.textContent = formatValue(kpi.value, kpi.format);
       },
     });
 

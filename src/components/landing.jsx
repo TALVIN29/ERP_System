@@ -108,21 +108,27 @@ export function Hero() {
   );
 }
 
+// Every figure here is computed from the real Superstore export, not chosen.
+// Revenue $2,297,201 across 9,994 lines; Bookcases, Tables and Supplies each
+// sell at a loss; and profit first turns negative in the 30% discount bucket
+// (20% still returns $90,338, so the widely-quoted 20% is simply wrong).
+//
+// Module scope, not inside the component: a fresh array each render would be a
+// new effect dependency every time and re-subscribe the observer forever.
+const STATS = [
+  { value: 9994, label: 'order lines' },
+  { value: 2297201, label: 'revenue', fmt: (n) => `$${(n / 1000000).toFixed(2)}M` },
+  { value: 3, label: 'sub-categories at a loss' },
+  { value: 30, label: 'break-even discount', fmt: (n) => `${n}%` },
+];
+
+const formatStat = (i, n) => (STATS[i].fmt ? STATS[i].fmt(n) : Math.round(n).toLocaleString());
+
 export function StatBand() {
   const ref = useRef(null);
   const animated = useRef(false);
   const isReducedMotion = reducedMotion();
-
-  // Every figure here is computed from the real Superstore export, not chosen.
-  // Revenue $2,297,201 across 9,994 lines; Bookcases, Tables and Supplies each
-  // sell at a loss; and profit first turns negative in the 30% discount bucket
-  // (20% still returns $90,338, so the widely-quoted 20% is simply wrong).
-  const stats = [
-    { value: 9994, label: 'order lines' },
-    { value: 2297201, label: 'revenue', fmt: (n) => `$${(n / 1000000).toFixed(2)}M` },
-    { value: 3, label: 'sub-categories at a loss' },
-    { value: 30, label: 'break-even discount', fmt: (n) => `${n}%` },
-  ];
+  const stats = STATS;
 
   useEffect(() => {
     if (isReducedMotion || !ref.current || animated.current) return;
@@ -133,18 +139,20 @@ export function StatBand() {
           animated.current = true;
           const numbers = ref.current.querySelectorAll('[data-number]');
           numbers.forEach((el, i) => {
-            const target = parseInt(el.dataset.number);
+            const target = Number(el.dataset.number);
+            // anime.js reports progress as 0-100, not 0-1. Multiplying the
+            // target by it directly overshoots by 100x, and animating
+            // `textContent` at the same time races this update for the same
+            // node. Tween a plain object and write the text ourselves.
+            const counter = { n: 0 };
             anime({
-              targets: el,
-              textContent: target,
+              targets: counter,
+              n: target,
               duration: 1500,
               delay: i * 100,
-              round: 1,
               easing: 'easeOutCubic',
-              update: function (anim) {
-                const current = Math.round(anim.progress * target);
-                el.textContent = stats[i].fmt ? stats[i].fmt(current) : current.toLocaleString();
-              },
+              update: () => { el.textContent = formatStat(i, counter.n); },
+              complete: () => { el.textContent = formatStat(i, target); },
             });
           });
         }
@@ -154,7 +162,7 @@ export function StatBand() {
     const observer = new IntersectionObserver(onIntersect, { threshold: 0.3 });
     observer.observe(ref.current);
     return () => observer.disconnect();
-  }, [isReducedMotion, stats]);
+  }, [isReducedMotion]);
 
   return (
     <div
