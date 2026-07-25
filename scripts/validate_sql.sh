@@ -78,7 +78,7 @@ $$;
 SQL
 
 fail=0
-for f in supabase/01_schema.sql supabase/02_rls.sql supabase/03_insights.sql supabase/04_seed.sql supabase/05_metrics.sql; do
+for f in supabase/01_schema.sql supabase/02_rls.sql supabase/03_insights.sql supabase/04_seed.sql supabase/05_metrics.sql supabase/06_grants.sql; do
   echo
   echo "=== $f ==="
   if run -q < "$f"; then
@@ -137,6 +137,48 @@ if [ "$fail" -eq 0 ]; then
                        (select count(*)::text from role_permissions rp where rp.role_id = current_role_id());" \
       | tail -1
   done
+
+  # The matrix save wiped all 73 grants in production because a delete
+  # committed and the follow-up insert was refused by RLS. These assert the
+  # replacement is genuinely atomic.
+  echo
+  echo "=== matrix save is transactional ==="
+  # Each case reports its own verdict from inside plpgsql, so a miscounted
+  # shell pipe cannot turn a failure into a pass.
+  run -At <<'SQL'
+set role app_user;
+select set_config('test.uid', (select id::text from auth.users where email='admin@superstore.demo'), false);
+
+-- 1. A payload that strips the last roles.update must raise AND change nothing.
+do $$
+declare before_n int; after_n int; raised boolean := false;
+begin
+  select count(*) into before_n from role_permissions;
+  begin
+    perform save_role_grants('{"admin":["orders.read"]}'::jsonb);
+  exception when others then
+    raised := true;
+    raise notice '  lockout guard raised: % (%)', sqlerrm, sqlstate;
+  end;
+  select count(*) into after_n from role_permissions;
+  raise notice '  lockout guard fired: %', case when raised then 'yes' else 'NO — SAVE WAS ALLOWED' end;
+  raise notice '  grants %/% after refused save: %',
+    after_n, before_n, case when after_n = before_n then 'unchanged (correct)' else 'CHANGED — NOT ATOMIC' end;
+end $$;
+
+-- 2. A legitimate save must apply and be readable back.
+do $$
+declare n int;
+begin
+  perform save_role_grants(jsonb_build_object('viewer', jsonb_build_array('orders.read','products.read')));
+  select count(*) into n from role_permissions rp
+    join roles r on r.id = rp.role_id where r.key = 'viewer';
+  raise notice '  legitimate save applied: viewer now has % grants (expected 2)', n;
+  -- put viewer back the way the seed had it
+  perform save_role_grants(jsonb_build_object('viewer',
+    jsonb_build_array('orders.read','products.read','insights.read','settings.read')));
+end $$;
+SQL
 
   echo
   echo "=== generating sample business data ==="
@@ -204,7 +246,7 @@ SQL
 
   echo
   echo "=== re-run idempotency: all four again ==="
-  for f in supabase/01_schema.sql supabase/02_rls.sql supabase/03_insights.sql supabase/04_seed.sql supabase/05_metrics.sql; do
+  for f in supabase/01_schema.sql supabase/02_rls.sql supabase/03_insights.sql supabase/04_seed.sql supabase/05_metrics.sql supabase/06_grants.sql; do
     run -q < "$f" >/dev/null 2>&1 && echo "  $f OK" || { echo "  $f FAILED ON RERUN"; fail=1; }
   done
 fi

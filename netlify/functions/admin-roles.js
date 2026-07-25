@@ -78,38 +78,26 @@ export default guard({
       }
 
       // Snapshot current state, string-keyed, for the audit row.
-      const { data: currentRolePerms, error: e3 } = await supa.from('role_permissions').select('role_id, permission_id');
+      const { data: before, error: e3 } = await supa.rpc('get_role_grants');
       if (e3) throw e3;
-      const permKeyById = new Map(perms.map((p) => [p.id, `${p.module}.${p.action}`]));
-      const keyById = new Map(roles.map((r) => [r.id, r.key]));
-      const before = {};
-      for (const r of roles) before[r.key] = [];
-      for (const g of currentRolePerms) {
-        const roleKey = keyById.get(g.role_id);
-        const permKey = permKeyById.get(g.permission_id);
-        if (roleKey && permKey) before[roleKey].push(permKey);
-      }
 
-      // Full-state replace.
-      const { error: delError } = await supa.from('role_permissions').delete().neq('role_id', -1);
-      if (delError) throw delError;
-
-      const toInsert = [];
-      for (const [roleKey, permKeys] of Object.entries(nextGrants)) {
-        const roleId = roleIdByKey.get(roleKey);
-        for (const permKey of permKeys || []) {
-          toInsert.push({ role_id: roleId, permission_id: permIdByKey.get(permKey) });
-        }
-      }
-      if (toInsert.length) {
-        const { error: insError } = await supa.from('role_permissions').insert(toInsert);
-        if (insError) throw insError;
+      // One transaction, in the database. The previous version deleted every
+      // role's grants and then inserted the replacements as two separate round
+      // trips — and the insert was refused by RLS, so the delete stood alone
+      // and every role was left with nothing. Any failure inside the function
+      // now rolls the delete back with it.
+      const { data: after, error: saveError } = await supa.rpc('save_role_grants', { p_grants: nextGrants });
+      if (saveError) {
+        // P0001 is the lockout guard; 42501 is a caller without roles.update.
+        const err = new Error(saveError.message || 'Could not save the permission matrix.');
+        err.status = saveError.code === 'P0001' ? 409 : saveError.code === '42501' ? 403 : 400;
+        throw err;
       }
 
       return {
         roles: roles.map((r) => ({ key: r.key, name: r.name })),
-        grants: nextGrants,
-        __audit: { action: 'update', entity: 'roles', entityId: 'matrix', before, after: nextGrants },
+        grants: after,
+        __audit: { action: 'update', entity: 'roles', entityId: 'matrix', before, after },
       };
     }
 
