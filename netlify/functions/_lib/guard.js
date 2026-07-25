@@ -113,8 +113,32 @@ function errorResponse(status, message, code) {
   });
 }
 
+/**
+ * Where a request's time actually went, reported to the caller.
+ *
+ * From outside, a slow endpoint is one number, and every explanation for it is
+ * a guess: the browser cannot tell a slow query from a distant database from a
+ * cold function. Server-Timing splits it — the browser shows it in DevTools'
+ * network panel per request, and `curl -I` shows it too.
+ */
+function timings() {
+  const marks = [];
+  return {
+    async track(name, promise) {
+      const t0 = Date.now();
+      try {
+        return await promise;
+      } finally {
+        marks.push(`${name};dur=${Date.now() - t0}`);
+      }
+    },
+    header: () => marks.join(', '),
+  };
+}
+
 export default function guard({ module, action, run }) {
   return async (req, context) => {
+    const t = timings();
     try {
       const method = req.method;
       const url = new URL(req.url);
@@ -142,7 +166,7 @@ export default function guard({ module, action, run }) {
       }
       let user, userId, token;
       try {
-        user = await verifyJWT(authHeader);
+        user = await t.track('jwt', verifyJWT(authHeader));
         userId = user.id;
         token = authHeader.slice(7);
       } catch (err) {
@@ -165,7 +189,7 @@ export default function guard({ module, action, run }) {
 
       let remaining = 0;
       try {
-        remaining = await checkRateLimit(userId, rateLimitType);
+        remaining = await t.track('ratelimit', checkRateLimit(userId, rateLimitType));
       } catch (err) {
         return new Response(
           JSON.stringify({ error: err.message, code: 'RATE_LIMITED' }),
@@ -216,7 +240,9 @@ export default function guard({ module, action, run }) {
       // grants only. Scope is the second wall, enforced by RLS through `supa` below
       // (constructed with the user's own JWT, never the service key).
       const requiredAction = actionForMethod(method, action);
-      const grants = await grantsPromise;
+      // Started before the rate-limit call, so this usually reports ~0: it
+      // measures the wait remaining, not the lookup's own cost.
+      const grants = await t.track('grants', grantsPromise);
       if (!grants.has(`${module}.${requiredAction}`)) {
         if (isWrite && idempotencyKey) await releaseIdempotencyKey(idempotencyKey, userId);
         return errorResponse(403, `You do not have permission to ${requiredAction} ${module}.`, 'FORBIDDEN');
@@ -227,7 +253,7 @@ export default function guard({ module, action, run }) {
       // Step 6: Execute + store + audit
       let response, httpStatus = 200;
       try {
-        response = await run(supa, body, userId, method, url);
+        response = await t.track('handler', run(supa, body, userId, method, url));
         if (method === 'POST') httpStatus = 201;
       } catch (err) {
         // Release idempotency key on handler error — a failed request must not be
@@ -268,6 +294,7 @@ export default function guard({ module, action, run }) {
         headers: {
           'Content-Type': 'application/json',
           'X-RateLimit-Remaining': String(remaining),
+          'Server-Timing': t.header(),
         },
       });
 
