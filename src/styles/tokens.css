@@ -1,0 +1,128 @@
+@import 'tailwindcss';
+
+/* ---------------------------------------------------------------------------
+   Design tokens — docs/UI-PAGE-GUIDE.md § Design tokens.
+   Values are the validated dataviz reference palette. If they change, re-run
+   the palette validator against the new surfaces rather than eyeballing.
+--------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light;
+  --surface-page:    #f9f9f7;
+  --surface-card:    #fcfcfb;
+  --surface-sunken:  #f0efec;
+  --text-primary:    #0b0b0b;
+  --text-secondary:  #52514e;
+  --text-muted:      #898781;
+  --border-hairline: rgba(11, 11, 11, 0.10);
+  --gridline:        #e1e0d9;
+  --baseline:        #c3c2b7;
+
+  --series-1: #2a78d6;  --series-2: #eb6834;
+  --series-3: #1baf7a;  --series-4: #eda100;
+
+  --status-good:     #0ca30c;
+  --status-warning:  #fab219;
+  --status-serious:  #ec835a;
+  --status-critical: #d03b3b;
+
+  --delta-up: #006300;  --delta-down: #d03b3b;
+
+  --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --radius-sm: 4px;  --radius-md: 8px;  --radius-lg: 12px;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px;
+  --space-4: 16px; --space-6: 24px; --space-8: 32px;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --surface-page:    #0d0d0d;
+  --surface-card:    #1a1a19;
+  --surface-sunken:  #232322;
+  --text-primary:    #ffffff;
+  --text-secondary:  #c3c2b7;
+  --text-muted:      #898781;
+  --border-hairline: rgba(255, 255, 255, 0.10);
+  --gridline:        #2c2c2a;
+  --baseline:        #383835;
+
+  --series-1: #3987e5;  --series-2: #d95926;
+  --series-3: #199e70;  --series-4: #c98500;
+
+  --delta-up: #0ca30c;
+}
+
+/* Tailwind v4 reads these through `inline` so utilities resolve the *live*
+   custom property, which is what makes data-theme swapping instant. */
+@theme inline {
+  --color-page:     var(--surface-page);
+  --color-card:     var(--surface-card);
+  --color-sunken:   var(--surface-sunken);
+  --color-primary:  var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-muted:    var(--text-muted);
+  --color-hairline: var(--border-hairline);
+  --color-gridline: var(--gridline);
+  --color-baseline: var(--baseline);
+
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-4: var(--series-4);
+
+  --color-good:     var(--status-good);
+  --color-warning:  var(--status-warning);
+  --color-serious:  var(--status-serious);
+  --color-critical: var(--status-critical);
+  --color-delta-up:   var(--delta-up);
+  --color-delta-down: var(--delta-down);
+
+  --font-sans: var(--font-sans);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+}
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--surface-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Focus is visible everywhere; never `outline: none` without a replacement. */
+:focus-visible {
+  outline: 2px solid var(--series-1);
+  outline-offset: 2px;
+}
+
+/* Reduced motion kills every animation — GSAP, anime.js, Chart.js and D3 all
+   check this flag too. Content renders in its final state. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Wide content scrolls inside its own container; the page body never scrolls
+   horizontally, at any width. */
+body { overflow-x: hidden; }
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+}
+.skip-link:focus { left: 8px; top: 8px; }

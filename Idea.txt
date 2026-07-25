@@ -1,0 +1,40 @@
+Brainstorm the requirements 
+
+* ERP dashboard that can make more data driven business decision making for management level regardless of the tier level
+* User logins ( Authentication Module ) 
+* Role & Permissions ( User Permission Module ) that is editable by the admin from the website
+* Settings Module 
+* Admin Module 
+* Website need to be dynamic to showcase your full stack skill
+* User be able to perform CRUD from the frontend according to the role and permission
+* Able to generate BI insight that can be integrate to model or AI dev
+* A landing page with FOMO CTA is required that consist of real photos
+* API communication between frontend and backend that handle dedup and idempotency which disallow the user to spam the server
+* Frontend UI/UX that make everthing clear and simple to navigate which can be understand at the first glance that can be operated by someone who just onboarded without compromise on the functionality
+* Use real dataset from Kaggle
+
+Tech Stack
+* Html
+* Css
+* Json
+* Supabase as the database
+* GSAP
+* Anime.js
+* D3.js
+* Chart.js
+and other tech stack that is appliacable
+
+The goal here is to build MVP for ERP system
+
+Deployment happens at netlify
+Git repo https://github.com/TALVIN29/ERP_System.git
+
+Study the current internal ERP system and seek for their limitation and make the enhancement
+setup the task priority
+
+Study and understand this repo and other ERP system repo
+https://github.com/thebingoai/thebingoai
+
+
+Don't create any plan 1st, brainstorm and ask me question
+Do not assume my requirements.
