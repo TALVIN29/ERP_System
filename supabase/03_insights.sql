@@ -130,17 +130,32 @@ rule_3 as (
     'evidence', jsonb_build_object('type', 'table')
   ) as finding
   from (
+    -- The median has to be its own aggregation pass: Postgres rejects an
+    -- ordered-set aggregate inside FILTER, so it cannot be computed and
+    -- compared against in the same select.
+    with mode_lags as (
+      select o.ship_mode, o.ship_lag_days
+      from order_items oi
+      join orders o on oi.order_id = o.order_id
+      where in_scope(oi.region, oi.category)
+    ),
+    mode_medians as (
+      select
+        ship_mode,
+        percentile_cont(0.5) within group (order by ship_lag_days)::int as mode_median
+      from mode_lags
+      group by ship_mode
+    )
     select
-      o.ship_mode,
-      percentile_cont(0.5) within group (order by o.ship_lag_days)::int as mode_median,
+      m.ship_mode,
+      m.mode_median,
       count(*) as mode_count,
-      count(*) filter (where o.ship_lag_days > percentile_cont(0.5) within group (order by o.ship_lag_days) + 2)::int as tail_count,
-      (count(*) filter (where o.ship_lag_days > percentile_cont(0.5) within group (order by o.ship_lag_days) + 2)::float / count(*)) as tail_pct,
-      avg(o.ship_lag_days) filter (where o.ship_lag_days > percentile_cont(0.5) within group (order by o.ship_lag_days) + 2) as avg_tail
-    from order_items oi
-    join orders o on oi.order_id = o.order_id
-    where in_scope(oi.region, oi.category)
-    group by o.ship_mode
+      count(*) filter (where l.ship_lag_days > m.mode_median + 2)::int as tail_count,
+      (count(*) filter (where l.ship_lag_days > m.mode_median + 2)::float / count(*)) as tail_pct,
+      avg(l.ship_lag_days) filter (where l.ship_lag_days > m.mode_median + 2) as avg_tail
+    from mode_lags l
+    join mode_medians m on m.ship_mode = l.ship_mode
+    group by m.ship_mode, m.mode_median
   ) t
   where tail_pct > 0.1
 ),
