@@ -4,6 +4,7 @@
  * src/lib/mock.js route()'s '/orders' branch exactly — that file is the contract.
  */
 import guard from './_lib/guard.js';
+import { scopeOptions } from './_lib/scope.js';
 
 const FILTER_FIELDS = ['region', 'category', 'sub_category', 'segment', 'state'];
 
@@ -43,7 +44,7 @@ export default guard({
       const { data, count, error } = await query.range(from, to);
       if (error) throw error;
 
-      return { rows: data || [], total: count || 0, page, pageSize };
+      return { rows: data || [], total: count || 0, page, pageSize, scope: await scopeOptions(supa, userId) };
     }
 
     if (method === 'POST') {

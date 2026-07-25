@@ -4,6 +4,7 @@
  * {rows, total, page, pageSize} with order_lines/total_sales computed per row.
  */
 import guard from './_lib/guard.js';
+import { scopeOptions } from './_lib/scope.js';
 import { applyFilters, sortRows, paginate } from './_lib/listutil.js';
 
 const money = (n) => Math.round(n * 100) / 100;
@@ -37,7 +38,10 @@ export default guard({
       });
 
       rows = applyFilters(rows, params, ['product_id', 'name']);
-      return paginate(sortRows(rows, params), params);
+      return {
+        ...paginate(sortRows(rows, params), params),
+        scope: await scopeOptions(supa, userId),
+      };
     }
 
     if (method === 'POST') {
