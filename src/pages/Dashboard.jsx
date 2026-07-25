@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import anime from 'animejs';
+import { countUp } from '../lib/countup.js';
 import { useApi } from '../lib/useApi';
 import {
   Card,
@@ -34,24 +34,17 @@ function KpiTile({ kpi, scope }) {
       return;
     }
 
-    // Count from the PREVIOUS value, not from zero — the direction of that
-    // movement is information. anime.js reports progress as 0-100, so the
-    // counter object is tweened and read directly rather than scaled by it.
-    const counter = { v: previousValue.current };
-    anime({
-      targets: counter,
-      v: kpi.value,
+    // Count from the PREVIOUS value, not from zero — on a refetch the
+    // direction of that movement is itself information.
+    const cancel = countUp(valueRef.current, {
+      from: previousValue.current,
+      to: kpi.value,
       duration: 800,
-      easing: 'easeOutExpo',
-      update: () => {
-        if (valueRef.current) valueRef.current.textContent = formatValue(counter.v, kpi.format);
-      },
-      complete: () => {
-        if (valueRef.current) valueRef.current.textContent = formatValue(kpi.value, kpi.format);
-      },
+      format: (n) => formatValue(n, kpi.format),
     });
 
     previousValue.current = kpi.value;
+    return cancel;
   }, [kpi.value, kpi.format]);
 
   const deltaDir = kpi.delta >= 0 ? 'up' : 'down';

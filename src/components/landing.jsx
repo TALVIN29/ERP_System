@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import anime from 'animejs';
+import { countUp } from '../lib/countup.js';
 import { Button, reducedMotion } from './ui.jsx';
 import { useAuth } from '../lib/auth.jsx';
 
@@ -131,37 +131,31 @@ export function StatBand() {
   const stats = STATS;
 
   useEffect(() => {
-    if (isReducedMotion || !ref.current || animated.current) return;
+    if (isReducedMotion || !ref.current) return;
 
+    const cancels = [];
     const onIntersect = (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting && !animated.current) {
-          animated.current = true;
-          const numbers = ref.current.querySelectorAll('[data-number]');
-          numbers.forEach((el, i) => {
-            const target = Number(el.dataset.number);
-            // anime.js reports progress as 0-100, not 0-1. Multiplying the
-            // target by it directly overshoots by 100x, and animating
-            // `textContent` at the same time races this update for the same
-            // node. Tween a plain object and write the text ourselves.
-            const counter = { n: 0 };
-            anime({
-              targets: counter,
-              n: target,
-              duration: 1500,
-              delay: i * 100,
-              easing: 'easeOutCubic',
-              update: () => { el.textContent = formatStat(i, counter.n); },
-              complete: () => { el.textContent = formatStat(i, target); },
-            });
-          });
-        }
-      });
+      for (const entry of entries) {
+        // Counts up once on first entry, not on every scroll-back.
+        if (!entry.isIntersecting || animated.current) continue;
+        animated.current = true;
+        ref.current.querySelectorAll('[data-number]').forEach((el, i) => {
+          cancels.push(countUp(el, {
+            to: Number(el.dataset.number),
+            duration: 1500,
+            delay: i * 100,
+            format: (n) => formatStat(i, n),
+          }));
+        });
+      }
     };
 
     const observer = new IntersectionObserver(onIntersect, { threshold: 0.3 });
     observer.observe(ref.current);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      cancels.forEach((c) => c());
+    };
   }, [isReducedMotion]);
 
   return (
