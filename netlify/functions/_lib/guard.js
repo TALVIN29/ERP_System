@@ -49,32 +49,28 @@ async function verifyJWT(bearerToken) {
  * only for the lifetime of this one request (the closure below), never across
  * requests.
  */
+/**
+ * One round trip, not two. This runs on every request, so the previous
+ * profiles-then-role_permissions pair was pure latency on the hot path.
+ * Still read from the database for the JWT's user — never from the request.
+ */
 async function getUserGrants(userId) {
-  const { data: profile, error: profileError } = await serviceClient
-    .from('profiles')
-    .select('role_id')
-    .eq('user_id', userId)
-    .single();
+  const { data, error } = await serviceClient.rpc('grants_for_user', { p_user: userId });
 
-  if (profileError || !profile) {
-    const err = new Error('No profile is set up for this account yet.');
-    err.status = 403;
-    err.code = 'no_profile';
-    throw err;
-  }
-
-  const { data: rows, error: grantError } = await serviceClient
-    .from('role_permissions')
-    .select('permissions(module, action)')
-    .eq('role_id', profile.role_id);
-
-  if (grantError) {
+  if (error) {
     const err = new Error('Could not load permissions.');
     err.status = 500;
     throw err;
   }
 
-  return new Set((rows || []).map((r) => `${r.permissions.module}.${r.permissions.action}`));
+  if (!data || data.length === 0) {
+    const err = new Error('No permissions are assigned to this account yet.');
+    err.status = 403;
+    err.code = 'no_grants';
+    throw err;
+  }
+
+  return new Set(data);
 }
 
 /** GET keeps the endpoint's declared action (usually 'read', sometimes 'export'). */
@@ -139,6 +135,15 @@ export default function guard({ module, action, run }) {
       const rateLimitType = isExport ? 'export' : isWrite ? 'write' : 'read';
 
       // Step 2: Rate limit
+      // Start the permission lookup now rather than after the rate-limit round
+      // trip: both only need the user id, and on a read they were the only two
+      // round trips in the chain. The ORDER of the decisions below is unchanged
+      // — rate limiting is still answered before permissions.
+      const grantsPromise = getUserGrants(userId);
+      // Nothing awaits this if we bail out early; keep it from becoming an
+      // unhandled rejection.
+      grantsPromise.catch(() => {});
+
       let remaining = 0;
       try {
         remaining = await checkRateLimit(userId, rateLimitType);
@@ -192,7 +197,7 @@ export default function guard({ module, action, run }) {
       // grants only. Scope is the second wall, enforced by RLS through `supa` below
       // (constructed with the user's own JWT, never the service key).
       const requiredAction = actionForMethod(method, action);
-      const grants = await getUserGrants(userId);
+      const grants = await grantsPromise;
       if (!grants.has(`${module}.${requiredAction}`)) {
         if (isWrite && idempotencyKey) await releaseIdempotencyKey(idempotencyKey, userId);
         return errorResponse(403, `You do not have permission to ${requiredAction} ${module}.`, 'FORBIDDEN');

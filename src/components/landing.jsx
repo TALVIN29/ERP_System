@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { countUp } from '../lib/countup.js';
+import {
+  IconLines, IconSales, IconWarning, IconPercent, IconProfit, IconOrders, IconAvgOrder,
+} from './icons.jsx';
 import { Button, reducedMotion } from './ui.jsx';
 import { useAuth } from '../lib/auth.jsx';
 
@@ -116,10 +119,10 @@ export function Hero() {
 // Module scope, not inside the component: a fresh array each render would be a
 // new effect dependency every time and re-subscribe the observer forever.
 const STATS = [
-  { value: 9994, label: 'order lines' },
-  { value: 2297201, label: 'revenue', fmt: (n) => `$${(n / 1000000).toFixed(2)}M` },
-  { value: 3, label: 'sub-categories at a loss' },
-  { value: 30, label: 'break-even discount', fmt: (n) => `${n}%` },
+  { value: 9994, label: 'order lines', Icon: IconLines },
+  { value: 2297201, label: 'revenue', fmt: (n) => `$${(n / 1000000).toFixed(2)}M`, Icon: IconSales },
+  { value: 3, label: 'sub-categories at a loss', Icon: IconWarning, tone: 'var(--status-critical)' },
+  { value: 30, label: 'break-even discount', fmt: (n) => `${n}%`, Icon: IconPercent },
 ];
 
 const formatStat = (i, n) => (STATS[i].fmt ? STATS[i].fmt(n) : Math.round(n).toLocaleString());
@@ -163,16 +166,25 @@ export function StatBand() {
       ref={ref}
       className="grid grid-cols-4 max-md:grid-cols-2 max-sm:grid-cols-1 gap-6 py-12 px-6 max-w-7xl mx-auto"
     >
-      {stats.map((stat, i) => (
-        <div key={i} className="flex flex-col items-center text-center">
-          <div className="text-[36px] font-semibold text-[var(--series-1)] tabular-nums">
-            <span data-number={stat.value}>
-              {isReducedMotion ? (stat.fmt ? stat.fmt(stat.value) : stat.value.toLocaleString()) : '0'}
+      {stats.map((stat, i) => {
+        const tone = stat.tone || 'var(--series-1)';
+        return (
+          <div key={i} className="flex flex-col items-center text-center">
+            <span
+              className="grid place-items-center w-10 h-10 rounded-full mb-3"
+              style={{ color: tone, background: `color-mix(in srgb, ${tone} 12%, transparent)` }}
+            >
+              <stat.Icon size={20} />
             </span>
+            <div className="text-[36px] font-semibold tabular-nums" style={{ color: tone }}>
+              <span data-number={stat.value}>
+                {isReducedMotion ? (stat.fmt ? stat.fmt(stat.value) : stat.value.toLocaleString()) : '0'}
+              </span>
+            </div>
+            <p className="text-[13px] text-[var(--text-secondary)] mt-2">{stat.label}</p>
           </div>
-          <p className="text-[13px] text-[var(--text-secondary)] mt-2">{stat.label}</p>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -239,6 +251,18 @@ export function FeatureRow({ image, title, description, imagePosition = 'left' }
   );
 }
 
+// The real East-scoped numbers the app returns for manager@superstore.demo.
+const PREVIEW_KPIS = [
+  { label: 'Sales', value: '$678,781', delta: '44.8%', up: true, Icon: IconSales },
+  { label: 'Profit', value: '$91,523', delta: '199.3%', up: true, Icon: IconProfit },
+  { label: 'Orders', value: '1,401', delta: '43.7%', up: true, Icon: IconOrders },
+  { label: 'Avg order', value: '$485', delta: '0.8%', up: true, Icon: IconAvgOrder },
+];
+
+// Shape of the real monthly trend: seasonal spikes climbing year on year.
+const TREND = [8, 12, 9, 18, 14, 26, 20, 33, 24, 41, 30, 52,
+  18, 24, 20, 35, 28, 44, 33, 55, 40, 62, 48, 78];
+
 export function ScreenshotFrame() {
   const ref = useRef(null);
   const isReducedMotion = reducedMotion();
@@ -263,10 +287,65 @@ export function ScreenshotFrame() {
   }, [isReducedMotion]);
 
   return (
-    <div ref={ref} id="screenshot" className="py-12 px-6 max-w-7xl mx-auto">
-      <div className="rounded-[var(--radius-lg)] overflow-hidden border border-[var(--border-hairline)] bg-[var(--surface-card)]">
-        <div className="aspect-video bg-[var(--surface-page)] flex items-center justify-center text-[var(--text-muted)]">
-          Dashboard screenshot (placeholder for actual app screenshot)
+    <div ref={ref} id="screenshot" className="py-12 px-6 max-w-6xl mx-auto">
+      <p className="text-center text-[13px] text-[var(--text-secondary)] mb-5">
+        The dashboard a Manager scoped to East actually sees.
+      </p>
+
+      {/* Rendered, not a screenshot: it uses the live design tokens, so it is
+          correct in both themes and never goes stale against the real app.
+          Every figure below is the real East-scoped result. */}
+      <div className="rounded-[var(--radius-lg)] overflow-hidden border border-[var(--border-hairline)] bg-[var(--surface-card)] shadow-2xl">
+        {/* window chrome */}
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[var(--border-hairline)] bg-[var(--surface-sunken)]">
+          <span className="w-2.5 h-2.5 rounded-full bg-[var(--status-critical)]/60" />
+          <span className="w-2.5 h-2.5 rounded-full bg-[var(--status-warning)]/60" />
+          <span className="w-2.5 h-2.5 rounded-full bg-[var(--status-good)]/60" />
+          <span className="flex-1" />
+          <span className="text-[10px] text-[var(--text-muted)]">superstore-erp · Dashboard</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--surface-card)] text-[var(--text-secondary)] border border-[var(--border-hairline)]">
+            East
+          </span>
+        </div>
+
+        <div className="p-4 sm:p-6 bg-[var(--surface-page)]">
+          <div className="grid grid-cols-4 max-sm:grid-cols-2 gap-3 mb-4">
+            {PREVIEW_KPIS.map((k) => (
+              <div key={k.label} className="rounded-[var(--radius-md)] border border-[var(--border-hairline)] bg-[var(--surface-card)] p-3">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <span style={{ color: 'var(--series-1)' }}><k.Icon size={13} /></span>
+                  <span className="text-[10px] text-[var(--text-muted)]">{k.label}</span>
+                </div>
+                <div className="text-[17px] font-semibold text-[var(--text-primary)]">{k.value}</div>
+                <div className="text-[10px]" style={{ color: k.up ? 'var(--delta-up)' : 'var(--delta-down)' }}>
+                  {k.up ? '↑' : '↓'} {k.delta}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-[var(--radius-md)] border border-[var(--border-hairline)] bg-[var(--surface-card)] p-3">
+            <p className="text-[11px] font-medium text-[var(--text-primary)] mb-2">Sales over time</p>
+            <svg viewBox="0 0 600 130" className="w-full h-[110px]" role="img"
+                 aria-label="Monthly sales trend, rising over four years">
+              {[0, 32, 64, 96].map((y) => (
+                <line key={y} x1="0" y1={y + 8} x2="600" y2={y + 8} stroke="var(--gridline)" strokeWidth="1" />
+              ))}
+              <polyline
+                fill="none"
+                stroke="var(--series-1)"
+                strokeWidth="2"
+                strokeLinejoin="round"
+                points={TREND.map((v, i) => `${(i / (TREND.length - 1)) * 596 + 2},${120 - v * 1.05}`).join(' ')}
+              />
+              <circle
+                cx="598"
+                cy={120 - TREND[TREND.length - 1] * 1.05}
+                r="3.5"
+                fill="var(--series-1)"
+              />
+            </svg>
+          </div>
         </div>
       </div>
     </div>

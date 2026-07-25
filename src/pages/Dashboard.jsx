@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { countUp } from '../lib/countup.js';
+import { KPI_ICONS } from '../components/icons.jsx';
 import { useApi } from '../lib/useApi';
 import {
   Card,
@@ -25,6 +26,7 @@ const reducedMotion = () => {
 function KpiTile({ kpi, scope }) {
   const valueRef = useRef(null);
   const previousValue = useRef(kpi.value);
+  const Icon = KPI_ICONS[kpi.key];
 
   useEffect(() => {
     if (!valueRef.current || reducedMotion()) {
@@ -53,23 +55,30 @@ function KpiTile({ kpi, scope }) {
   return (
     <Card className="p-4">
       <div className="flex flex-col gap-2">
-        <p className="text-[11px] text-[var(--text-muted)] font-medium">{kpi.label}</p>
+        <div className="flex items-center gap-2">
+          {Icon && (
+            <span
+              className="grid place-items-center w-7 h-7 rounded-[var(--radius-md)] shrink-0"
+              style={{ color: 'var(--series-1)', background: 'color-mix(in srgb, var(--series-1) 12%, transparent)' }}
+            >
+              <Icon size={16} />
+            </span>
+          )}
+          <p className="text-[11px] text-[var(--text-muted)] font-medium">{kpi.label}</p>
+        </div>
         <div
           ref={valueRef}
-          className="text-[24px] font-semibold text-[var(--text-primary)] font-variant-numeric: proportional-nums"
+          className="text-[24px] font-semibold text-[var(--text-primary)]"
           style={{ fontVariantNumeric: 'proportional-nums' }}
         >
           {formatValue(kpi.value, kpi.format)}
         </div>
-        <div className="flex items-center gap-1 text-[11px]">
-          <span
-            aria-hidden="true"
-            style={{ color: deltaColor }}
-          >
-            {deltaDir === 'up' ? '↑' : '↓'}
-          </span>
-          <span style={{ color: deltaColor }}>
+        {/* Direction is icon + arrow + label, never colour alone. */}
+        <div className="flex items-center gap-1 text-[11px]" style={{ color: deltaColor }}>
+          <span aria-hidden="true">{deltaDir === 'up' ? '↑' : '↓'}</span>
+          <span>
             {Math.abs(Math.round(kpi.delta * 1000) / 10)}%
+            <span className="sr-only"> {deltaDir === 'up' ? 'increase' : 'decrease'}</span>
           </span>
         </div>
       </div>

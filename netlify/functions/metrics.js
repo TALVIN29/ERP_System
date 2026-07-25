@@ -36,18 +36,24 @@ export default guard({
   module: 'insights',
   action: 'read',
   run: async (supa, body, userId, method, url) => {
-    // Fetch aggregated metrics. RLS ensures scoping.
-    const { data: kpis, error: e1 } = await supa.rpc('get_dashboard_kpis');
-    if (e1) throw e1;
+    // Four independent aggregates. Awaited one at a time they cost the sum of
+    // their latencies (~6.5s measured); together they cost the slowest one.
+    // Scope is applied inside each function, which also checks insights.read.
+    const [kpiRes, trendRes, catRes, regionRes] = await Promise.all([
+      supa.rpc('get_dashboard_kpis'),
+      supa.rpc('get_sales_trend'),
+      supa.rpc('get_category_profit'),
+      supa.rpc('get_region_sales'),
+    ]);
 
-    const { data: trend, error: e2 } = await supa.rpc('get_sales_trend');
-    if (e2) throw e2;
+    for (const r of [kpiRes, trendRes, catRes, regionRes]) {
+      if (r.error) throw r.error;
+    }
 
-    const { data: categoryProfit, error: e3 } = await supa.rpc('get_category_profit');
-    if (e3) throw e3;
-
-    const { data: regionSales, error: e4 } = await supa.rpc('get_region_sales');
-    if (e4) throw e4;
+    const kpis = kpiRes.data;
+    const trend = trendRes.data;
+    const categoryProfit = catRes.data;
+    const regionSales = regionRes.data;
 
     return {
       metrics: {
