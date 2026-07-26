@@ -47,6 +47,25 @@ $$;
 -- no matter what range was selected. p_date_from/p_date_to (null = all time)
 -- narrow the `total` here; the delta intentionally stays anchored to the data's
 -- own last-90-days window regardless of the picked range (see cur/prev below).
+--
+-- The frontend's "Last 30/90 days" preset needs the data's own latest order
+-- date to anchor to (the Superstore export ends in 2018 — a wall-clock window
+-- would always come back empty). This is the one source of truth for that.
+create or replace function get_max_order_date()
+returns date
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with guard as (select require_insights_read()), me as (select * from my_scope())
+  select max(o.order_date)
+  from order_items oi
+  join orders o on o.order_id = oi.order_id, me, guard
+  where (array_length(me.regions, 1) is null or oi.region = any(me.regions))
+    and (array_length(me.categories, 1) is null or oi.category = any(me.categories))
+$$;
+
 drop function if exists get_dashboard_kpis();
 
 create or replace function get_dashboard_kpis(p_date_from date default null, p_date_to date default null)

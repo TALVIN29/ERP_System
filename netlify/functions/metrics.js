@@ -41,17 +41,18 @@ export default guard({
     const dateFrom = url.searchParams.get('date_from') || null;
     const dateTo = url.searchParams.get('date_to') || null;
 
-    // Four independent aggregates. Awaited one at a time they cost the sum of
+    // Five independent aggregates. Awaited one at a time they cost the sum of
     // their latencies (~6.5s measured); together they cost the slowest one.
     // Scope is applied inside each function, which also checks insights.read.
-    const [kpiRes, trendRes, catRes, regionRes] = await Promise.all([
+    const [kpiRes, trendRes, catRes, regionRes, maxDateRes] = await Promise.all([
       supa.rpc('get_dashboard_kpis', { p_date_from: dateFrom, p_date_to: dateTo }),
       supa.rpc('get_sales_trend', { p_date_from: dateFrom, p_date_to: dateTo }),
       supa.rpc('get_category_profit', { p_date_from: dateFrom, p_date_to: dateTo }),
       supa.rpc('get_region_sales', { p_date_from: dateFrom, p_date_to: dateTo }),
+      supa.rpc('get_max_order_date'),
     ]);
 
-    for (const r of [kpiRes, trendRes, catRes, regionRes]) {
+    for (const r of [kpiRes, trendRes, catRes, regionRes, maxDateRes]) {
       if (r.error) throw r.error;
     }
 
@@ -66,7 +67,10 @@ export default guard({
         trend: (trend || []).map(normalizeTrend),
         categoryProfit: (categoryProfit || []).map(normalizeCategoryProfit),
         regionSales: (regionSales || []).map(normalizeRegionSales),
-      }
+      },
+      // The dashboard's date-range presets anchor to this instead of wall-clock
+      // time (src/pages/Dashboard.jsx) — the Superstore export ends in 2018.
+      maxDate: maxDateRes.data,
     };
   }
 });
