@@ -653,6 +653,9 @@ function mutateCollection(name, idKey, method, body) {
       if (used.length) {
         throw httpError(409, `This product appears on ${used.length} order lines totalling ${fmt(sum(used, 'sales'))}.`);
       }
+      // The client uses a dry run to preview whether a delete would be
+      // blocked, before the user has confirmed anything — must not delete.
+      if (body.dryRun) return { dryRun: true };
     }
     const [gone] = state[name].splice(i, 1);
     audit('DELETE', name, gone[idKey], gone, null);

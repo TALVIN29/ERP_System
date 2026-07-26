@@ -121,10 +121,11 @@ export function useCrudPage(endpoint, { perms = {} }) {
     const key = newIdempotencyKey();
     setIdempotencyKey(key);
 
-    // Products: check for 409 and pre-report before asking
+    // Products: check for 409 and pre-report before asking. dryRun: true so
+    // the server runs the referenced-by-orders check without deleting.
     if (endpoint === 'products') {
       try {
-        await api(`/${endpoint}`, { method: 'DELETE', body: item, idempotencyKey: key });
+        await api(`/${endpoint}`, { method: 'DELETE', body: { ...item, dryRun: true }, idempotencyKey: key });
       } catch (err) {
         if (err instanceof ApiError && err.status === 409) {
           setDeleteReportMsg(err.message);

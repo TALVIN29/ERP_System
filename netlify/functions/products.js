@@ -72,6 +72,10 @@ export default guard({
         throw err;
       }
 
+      // The client uses a dry run to preview whether a delete would be
+      // blocked, before the user has confirmed anything — must not delete.
+      if (body.dryRun) return { dryRun: true };
+
       const { error } = await supa.from('products').delete().eq('product_id', body.product_id);
       if (error) throw error;
       return { deleted: body.product_id, __audit: { action: 'delete', entity: 'products', entityId: body.product_id, before, after: null } };
