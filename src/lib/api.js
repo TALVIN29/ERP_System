@@ -30,7 +30,7 @@ async function authHeader() {
  * Functions; the browser never talks to Postgres directly.
  */
 export async function api(path, { method = 'GET', body, idempotencyKey, params, signal } = {}) {
-  const qs = params ? '?' + new URLSearchParams(clean(params)) : '';
+  const qs = params ? '?' + buildQueryString(clean(params)) : '';
 
   if (MOCK_MODE) {
     if (method !== 'GET' && !idempotencyKey) {
@@ -81,6 +81,21 @@ export async function api(path, { method = 'GET', body, idempotencyKey, params, 
 
 function safeParse(text) {
   try { return JSON.parse(text); } catch { return { error: text }; }
+}
+
+// URLSearchParams(obj) coerces array values with String(), comma-joining them
+// into one value instead of repeating the key — the server reads with
+// getAll(), which then sees a single 'East,West' value, not ['East','West'].
+function buildQueryString(params) {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (Array.isArray(v)) {
+      if (v.length) v.forEach((x) => qs.append(k, x));
+    } else {
+      qs.append(k, v);
+    }
+  }
+  return qs.toString();
 }
 
 function clean(params) {
