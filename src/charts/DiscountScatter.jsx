@@ -18,19 +18,11 @@ export function DiscountScatter({ points = [], ladder = [] }) {
   const [breakEven, setBreakEven] = useState(null);
   const [tooltip, setTooltip] = useState(null);
 
-  // Fall back to table alone below ~200 points
-  if (points.length < 200) {
-    return (
-      <Card>
-        <div className="p-6">
-          <h2 className="text-[13px] font-semibold text-[var(--text-primary)] mb-4" aria-label="Discount analysis">
-            Discount analysis by decile
-          </h2>
-          <TableView columns={ladderColumns} rows={ladder} label="View as table" />
-        </div>
-      </Card>
-    );
-  }
+  // Fall back to table alone below ~200 points. Checked inside the effect
+  // (not an early return before the hooks below) — an early return here would
+  // make useEffect's hook call conditional on `points.length`, which crashes
+  // React the moment a mounted instance re-renders across the 200 threshold.
+  const sparse = points.length < 200;
 
   const redraw = () => {
     if (!containerRef.current || !canvasRef.current || !svgRef.current) return;
@@ -193,6 +185,7 @@ export function DiscountScatter({ points = [], ladder = [] }) {
   };
 
   useEffect(() => {
+    if (sparse) return;
     redraw();
 
     const observer = new MutationObserver(redraw);
@@ -208,7 +201,20 @@ export function DiscountScatter({ points = [], ladder = [] }) {
       observer.disconnect();
       resizeObserver.disconnect();
     };
-  }, [points, ladder]);
+  }, [points, ladder, sparse]);
+
+  if (sparse) {
+    return (
+      <Card>
+        <div className="p-6">
+          <h2 className="text-[13px] font-semibold text-[var(--text-primary)] mb-4" aria-label="Discount analysis">
+            Discount analysis by decile
+          </h2>
+          <TableView columns={ladderColumns} rows={ladder} label="View as table" />
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card>
