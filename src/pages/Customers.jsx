@@ -86,7 +86,7 @@ export default function Customers() {
     { key: 'city', label: 'City', sortable: false, hideBelow: 'max-md:hidden' },
     { key: 'state', label: 'State', sortable: true, hideBelow: 'max-md:hidden' },
     { key: 'region', label: 'Region', sortable: true, hideBelow: 'max-lg:hidden' },
-    { key: 'order_count', label: 'Orders', sortable: false, numeric: true, hideBelow: 'max-md:hidden' },
+    { key: 'orders', label: 'Orders', sortable: false, numeric: true, hideBelow: 'max-md:hidden' },
     { key: 'total_sales', label: 'Total sales', sortable: true, numeric: true, render: (r) => fmtCurrency(r.total_sales) },
   ];
 
