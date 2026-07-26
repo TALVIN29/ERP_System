@@ -36,14 +36,19 @@ export default guard({
   module: 'insights',
   action: 'read',
   run: async (supa, body, userId, method, url) => {
+    // The dashboard puts the range in the URL so a filtered view is linkable;
+    // null bounds mean "all time" and each RPC treats a null the same way.
+    const dateFrom = url.searchParams.get('date_from') || null;
+    const dateTo = url.searchParams.get('date_to') || null;
+
     // Four independent aggregates. Awaited one at a time they cost the sum of
     // their latencies (~6.5s measured); together they cost the slowest one.
     // Scope is applied inside each function, which also checks insights.read.
     const [kpiRes, trendRes, catRes, regionRes] = await Promise.all([
-      supa.rpc('get_dashboard_kpis'),
-      supa.rpc('get_sales_trend'),
-      supa.rpc('get_category_profit'),
-      supa.rpc('get_region_sales'),
+      supa.rpc('get_dashboard_kpis', { p_date_from: dateFrom, p_date_to: dateTo }),
+      supa.rpc('get_sales_trend', { p_date_from: dateFrom, p_date_to: dateTo }),
+      supa.rpc('get_category_profit', { p_date_from: dateFrom, p_date_to: dateTo }),
+      supa.rpc('get_region_sales', { p_date_from: dateFrom, p_date_to: dateTo }),
     ]);
 
     for (const r of [kpiRes, trendRes, catRes, regionRes]) {

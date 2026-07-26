@@ -94,13 +94,15 @@ function formatValue(value, format) {
   return Number(value).toLocaleString('en');
 }
 
-function DateRangeControl({ onRangeChange }) {
+function DateRangeControl({ maxDate }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [preset, setPreset] = useState('all');
 
   const handlePreset = (p) => {
     setPreset(p);
-    const now = new Date();
+    // Anchor to the data's own latest order date, not wall-clock time — this
+    // dataset doesn't reach the present day, so "today" would empty everything.
+    const now = maxDate ? new Date(maxDate) : new Date();
     let from, to;
 
     if (p === 'all') {
@@ -140,6 +142,7 @@ export default function Dashboard() {
 
   const { data, error, loading, refetching, refetch } = useApi('/metrics', params);
   const metrics = data?.metrics;
+  const maxDate = data?.maxDate;
 
   if (error) {
     return (
@@ -158,7 +161,7 @@ export default function Dashboard() {
   return (
     <div className="p-6">
       <PageHeader title="Dashboard">
-        <DateRangeControl />
+        <DateRangeControl maxDate={maxDate} />
       </PageHeader>
 
       {/* KPI Tiles */}

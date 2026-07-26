@@ -42,7 +42,14 @@ begin
 end;
 $$;
 
-create or replace function get_dashboard_kpis()
+-- The dashboard's date-range picker used to be pure decoration: these RPCs took
+-- no date args at all, so metrics.js always fetched the same all-time totals
+-- no matter what range was selected. p_date_from/p_date_to (null = all time)
+-- narrow the `total` here; the delta intentionally stays anchored to the data's
+-- own last-90-days window regardless of the picked range (see cur/prev below).
+drop function if exists get_dashboard_kpis();
+
+create or replace function get_dashboard_kpis(p_date_from date default null, p_date_to date default null)
 returns table (key text, label text, value numeric, format text, delta numeric)
 language sql
 stable
@@ -73,6 +80,8 @@ as $$
   total as (
     select coalesce(sum(sales), 0) s, coalesce(sum(profit), 0) p, count(distinct order_id) n
     from scoped
+    where (p_date_from is null or order_date >= p_date_from)
+      and (p_date_to is null or order_date <= p_date_to)
   )
   select 'sales', 'Sales', total.s, 'currency',
          case when prev.s = 0 then 0 else round((cur.s - prev.s) / prev.s, 4) end
@@ -93,7 +102,9 @@ as $$
   from total, cur, prev;
 $$;
 
-create or replace function get_sales_trend()
+drop function if exists get_sales_trend();
+
+create or replace function get_sales_trend(p_date_from date default null, p_date_to date default null)
 returns table (month text, sales numeric)
 language sql
 stable
@@ -106,11 +117,15 @@ as $$
   join orders o on o.order_id = oi.order_id, me, guard
   where (array_length(me.regions, 1) is null or oi.region = any(me.regions))
     and (array_length(me.categories, 1) is null or oi.category = any(me.categories))
+    and (p_date_from is null or o.order_date >= p_date_from)
+    and (p_date_to is null or o.order_date <= p_date_to)
   group by date_trunc('month', o.order_date)
   order by date_trunc('month', o.order_date);
 $$;
 
-create or replace function get_category_profit()
+drop function if exists get_category_profit();
+
+create or replace function get_category_profit(p_date_from date default null, p_date_to date default null)
 returns table (category text, profit numeric)
 language sql
 stable
@@ -119,14 +134,19 @@ set search_path = public
 as $$
   with guard as (select require_insights_read()), me as (select * from my_scope())
   select oi.category, round(sum(oi.profit), 2)
-  from order_items oi, me, guard
+  from order_items oi
+  join orders o on o.order_id = oi.order_id, me, guard
   where (array_length(me.regions, 1) is null or oi.region = any(me.regions))
     and (array_length(me.categories, 1) is null or oi.category = any(me.categories))
+    and (p_date_from is null or o.order_date >= p_date_from)
+    and (p_date_to is null or o.order_date <= p_date_to)
   group by oi.category
   order by oi.category;
 $$;
 
-create or replace function get_region_sales()
+drop function if exists get_region_sales();
+
+create or replace function get_region_sales(p_date_from date default null, p_date_to date default null)
 returns table (region text, sales numeric)
 language sql
 stable
@@ -135,9 +155,12 @@ set search_path = public
 as $$
   with guard as (select require_insights_read()), me as (select * from my_scope())
   select oi.region, round(sum(oi.sales), 2)
-  from order_items oi, me, guard
+  from order_items oi
+  join orders o on o.order_id = oi.order_id, me, guard
   where (array_length(me.regions, 1) is null or oi.region = any(me.regions))
     and (array_length(me.categories, 1) is null or oi.category = any(me.categories))
+    and (p_date_from is null or o.order_date >= p_date_from)
+    and (p_date_to is null or o.order_date <= p_date_to)
   group by oi.region
   order by oi.region;
 $$;

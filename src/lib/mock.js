@@ -445,10 +445,14 @@ async function route(path, params, method, body) {
 
   if (path === '/metrics') {
     requirePerm('insights', 'read');
+    const allItems = scopedItems(s);
     // The dashboard puts the range in the URL so a filtered view is linkable;
     // it only means anything if the range actually narrows the numbers.
-    const items = inRange(scopedItems(s), params);
-    return { metrics: buildMetrics(items) };
+    const items = inRange(allItems, params);
+    // Presets ("last 30/90 days") must anchor to the data's own latest order
+    // date, not wall-clock time — this dataset doesn't reach the present day.
+    const maxDate = allItems.reduce((max, i) => (i.order_date > max ? i.order_date : max), '');
+    return { metrics: buildMetrics(items, allItems, maxDate), maxDate };
   }
 
   if (path === '/insights') {
@@ -699,7 +703,31 @@ function sortRows(rows, params) {
   });
 }
 
-function buildMetrics(items) {
+// Delta is "vs the preceding period", a fixed 90-day window off the data's own
+// latest date — independent of whatever range the user has filtered to.
+// Mirrors get_dashboard_kpis()'s cur/prev windows in supabase/05_metrics.sql.
+function kpiDelta(allItems, maxDate, key) {
+  if (!maxDate) return 0;
+  const curStart = new Date(new Date(maxDate).getTime() - 90 * 86400000).toISOString().slice(0, 10);
+  const prevStart = new Date(new Date(maxDate).getTime() - 180 * 86400000).toISOString().slice(0, 10);
+  const cur = allItems.filter((i) => i.order_date > curStart && i.order_date <= maxDate);
+  const prev = allItems.filter((i) => i.order_date > prevStart && i.order_date <= curStart);
+
+  const curVal = (rows) => {
+    if (key === 'sales') return sum(rows, 'sales');
+    if (key === 'profit') return sum(rows, 'profit');
+    const orderIds = new Set(rows.map((i) => i.order_id));
+    if (key === 'orders') return orderIds.size;
+    if (key === 'aov') return orderIds.size ? sum(rows, 'sales') / orderIds.size : 0;
+  };
+
+  const c = curVal(cur);
+  const p = curVal(prev);
+  if (!p) return 0;
+  return Math.round(((c - p) / Math.abs(p)) * 10000) / 10000;
+}
+
+function buildMetrics(items, allItems = items, maxDate = '') {
   const sales = sum(items, 'sales');
   const profit = sum(items, 'profit');
   const orderIds = new Set(items.map((i) => i.order_id));
@@ -710,10 +738,10 @@ function buildMetrics(items) {
 
   return {
     kpis: [
-      { key: 'sales', label: 'Sales', value: sales, format: 'currency', delta: 0.124 },
-      { key: 'profit', label: 'Profit', value: profit, format: 'currency', delta: -0.031 },
-      { key: 'orders', label: 'Orders', value: orderIds.size, format: 'number', delta: 0.082 },
-      { key: 'aov', label: 'Avg order', value: orderIds.size ? sales / orderIds.size : 0, format: 'currency', delta: 0.039 },
+      { key: 'sales', label: 'Sales', value: sales, format: 'currency', delta: kpiDelta(allItems, maxDate, 'sales') },
+      { key: 'profit', label: 'Profit', value: profit, format: 'currency', delta: kpiDelta(allItems, maxDate, 'profit') },
+      { key: 'orders', label: 'Orders', value: orderIds.size, format: 'number', delta: kpiDelta(allItems, maxDate, 'orders') },
+      { key: 'aov', label: 'Avg order', value: orderIds.size ? sales / orderIds.size : 0, format: 'currency', delta: kpiDelta(allItems, maxDate, 'aov') },
     ],
     trend,
     categoryProfit: [...byCategory.entries()].map(([category, rows]) => ({ category, profit: money(sum(rows, 'profit')) })),
