@@ -5,6 +5,7 @@ import {
   Outlet,
   Route,
   Navigate,
+  useRouteError,
 } from 'react-router-dom';
 import { AuthProvider } from './lib/auth.jsx';
 import AppShell from './layout/AppShell.jsx';
@@ -43,6 +44,8 @@ function Root() {
  *  debug/full-review/pages.md and debug/full-review/charts.md for two bugs
  *  this would otherwise have taken the whole SPA down for. */
 function RootError() {
+  const error = useRouteError();
+  console.error(error);
   return (
     <div className="flex h-screen items-center justify-center px-6 text-center">
       <div>

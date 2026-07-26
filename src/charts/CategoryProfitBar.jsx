@@ -14,7 +14,7 @@ export function CategoryProfitBar({ data = [] }) {
   const categorySlot = { 'Furniture': 0, 'Office Supplies': 1, 'Technology': 2 };
   const seriesColors = [cssVar('--series-1'), cssVar('--series-2'), cssVar('--series-3')];
 
-  const config = {
+  const buildConfig = () => ({
     type: 'bar',
     data: {
       labels: data.map((d) => d.category),
@@ -55,9 +55,9 @@ export function CategoryProfitBar({ data = [] }) {
         },
       },
     },
-  };
+  });
 
-  useChart(canvasRef, config);
+  useChart(canvasRef, buildConfig);
 
   return (
     <Card>

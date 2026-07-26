@@ -10,7 +10,7 @@ const tableColumns = [
 export function SalesTrendLine({ data = [] }) {
   const canvasRef = useRef(null);
 
-  const config = {
+  const buildConfig = () => ({
     type: 'line',
     data: {
       labels: data.map((d) => d.month),
@@ -58,9 +58,9 @@ export function SalesTrendLine({ data = [] }) {
         },
       },
     },
-  };
+  });
 
-  useChart(canvasRef, config);
+  useChart(canvasRef, buildConfig);
 
   return (
     <Card>
