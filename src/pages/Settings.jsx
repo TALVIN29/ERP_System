@@ -221,10 +221,7 @@ export default function Settings() {
           <TextField
             label="Organisation name"
             value={orgName}
-            onChange={(e) => {
-              setOrgName(e.target.value);
-              setOrgDirty(true);
-            }}
+            onChange={(e) => setOrgName(e.target.value)}
             disabled={!canEditOrg}
           />
 
@@ -235,10 +232,7 @@ export default function Settings() {
             <select
               id="currency"
               value={currency}
-              onChange={(e) => {
-                setCurrency(e.target.value);
-                setOrgDirty(true);
-              }}
+              onChange={(e) => setCurrency(e.target.value)}
               disabled={!canEditOrg}
               className="h-9 w-full px-3 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-hairline)] text-[13px] text-[var(--text-primary)] disabled:opacity-60"
             >
@@ -254,10 +248,7 @@ export default function Settings() {
           <TextField
             label="Fiscal year start"
             value={fiscalYearStart}
-            onChange={(e) => {
-              setFiscalYearStart(e.target.value);
-              setOrgDirty(true);
-            }}
+            onChange={(e) => setFiscalYearStart(e.target.value)}
             disabled={!canEditOrg}
             placeholder="MM-DD"
           />
@@ -273,10 +264,7 @@ export default function Settings() {
               min="0"
               max="1"
               value={discountAlert}
-              onChange={(e) => {
-                setDiscountAlert(Number(e.target.value));
-                setOrgDirty(true);
-              }}
+              onChange={(e) => setDiscountAlert(Number(e.target.value))}
               disabled={!canEditOrg}
               className="h-9 w-full px-3 rounded-[var(--radius-md)] bg-[var(--surface-card)] border border-[var(--border-hairline)] text-[13px] text-[var(--text-primary)] disabled:opacity-60"
             />
@@ -291,10 +279,7 @@ export default function Settings() {
             label="Minimum loss"
             type="number"
             value={minLoss}
-            onChange={(e) => {
-              setMinLoss(Number(e.target.value));
-              setOrgDirty(true);
-            }}
+            onChange={(e) => setMinLoss(Number(e.target.value))}
             disabled={!canEditOrg}
           />
 
