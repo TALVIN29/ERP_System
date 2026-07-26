@@ -17,7 +17,7 @@ export function RegionDonut({ data = [] }) {
   const sortedData = [...data].sort((a, b) => a.region.localeCompare(b.region));
   const total = sortedData.reduce((sum, d) => sum + d.sales, 0);
 
-  const config = {
+  const buildConfig = () => ({
     type: 'doughnut',
     data: {
       labels: sortedData.map((d) => d.region),
@@ -58,9 +58,9 @@ export function RegionDonut({ data = [] }) {
         },
       },
     },
-  };
+  });
 
-  useChart(canvasRef, config);
+  useChart(canvasRef, buildConfig);
 
   return (
     <Card>

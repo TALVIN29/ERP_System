@@ -25,26 +25,26 @@ export function cssVar(name) {
  * CSS custom properties on its own, so this hook is the only place that
  * concern lives.
  *
- * `config` is expected to be memoised by the caller; an inline object literal
- * would rebuild the chart on every render.
+ * `configFactory` is a function returning a fresh config, not the config
+ * itself — cssVar() must re-resolve on every rebuild (mount + theme toggle),
+ * not just once at the first render.
  */
-export function useChart(canvasRef, config) {
+export function useChart(canvasRef, configFactory) {
   const chartRef = useRef(null);
 
   useEffect(() => {
-    if (!canvasRef.current || !config) return;
+    if (!canvasRef.current || !configFactory) return;
 
     const build = () => {
       if (chartRef.current) chartRef.current.destroy();
-      chartRef.current = new Chart(canvasRef.current, config);
+      chartRef.current = new Chart(canvasRef.current, configFactory());
     };
 
     build();
 
     const observer = new MutationObserver(() => {
-      // The config closes over cssVar() values read at render time, so the
-      // caller re-renders on theme change too; rebuilding here covers the
-      // canvas itself, which cannot repaint from CSS.
+      // Rebuilding re-invokes configFactory(), which re-resolves cssVar()
+      // against the new data-theme — the canvas cannot repaint from CSS.
       if (canvasRef.current) build();
     });
     observer.observe(document.documentElement, {
@@ -59,7 +59,7 @@ export function useChart(canvasRef, config) {
         chartRef.current = null;
       }
     };
-  }, [config, canvasRef]);
+  }, [configFactory, canvasRef]);
 
   return chartRef;
 }
