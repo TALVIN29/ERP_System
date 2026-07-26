@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Card, SeverityPill, Button } from './ui';
 import { DiscountScatter } from '../charts/DiscountScatter';
+import { api } from '../lib/api';
 
 const severityBg = {
   critical: 'rgba(208, 59, 59, 0.08)',
@@ -128,8 +129,7 @@ export function ExportMenu({ canExport = false }) {
   const datasets = ['orders', 'order_items', 'products', 'customers', 'insights'];
 
   const handleExport = (dataset) => {
-    const url = `/api/export?dataset=${dataset}`;
-    fetch(url).then((r) => r.json()).then((data) => {
+    api('/export', { params: { dataset } }).then((data) => {
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
