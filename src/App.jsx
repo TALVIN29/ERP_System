@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, Component } from 'react';
 import {
   createBrowserRouter,
   createRoutesFromElements,
@@ -36,10 +36,40 @@ function Root() {
   );
 }
 
+const CHUNK_ERROR = /Failed to fetch dynamically imported module|Importing a module script failed/i;
+const RELOAD_FLAG = 'chunk-reload-attempted';
+
+/** Stale tab after a new deploy tries to import a chunk hash that no longer
+ *  exists on the CDN. One reload picks up the fresh index.html/manifest;
+ *  the sessionStorage flag stops a reload loop if the deploy is broken. */
+class ChunkErrorBoundary extends Component {
+  state = { failed: false };
+
+  static getDerivedStateFromError(error) {
+    if (CHUNK_ERROR.test(error?.message ?? '')) return { failed: true };
+    throw error;
+  }
+
+  componentDidCatch() {
+    if (!sessionStorage.getItem(RELOAD_FLAG)) {
+      sessionStorage.setItem(RELOAD_FLAG, '1');
+      window.location.reload();
+    }
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
 /** Chunk load is fast and the shell is already painted, so this stays blank
  *  rather than flashing a spinner that outlives itself. */
 function Lazy({ children }) {
-  return <Suspense fallback={null}>{children}</Suspense>;
+  return (
+    <ChunkErrorBoundary>
+      <Suspense fallback={null}>{children}</Suspense>
+    </ChunkErrorBoundary>
+  );
 }
 
 /**
