@@ -40,9 +40,7 @@ function Root() {
 /** Catches any render-time throw the data router surfaces (from any route,
  *  not just a lazy-chunk failure — ChunkErrorBoundary only ever handles that
  *  one case and rethrows everything else). Without this, one bad page crashes
- *  the whole app to react-router's raw "Unexpected Application Error!" — see
- *  debug/full-review/pages.md and debug/full-review/charts.md for two bugs
- *  this would otherwise have taken the whole SPA down for. */
+ *  the whole app to react-router's raw "Unexpected Application Error!". */
 function RootError() {
   const error = useRouteError();
   console.error(error);
