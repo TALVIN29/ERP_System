@@ -34,7 +34,9 @@ scoped as (
 rule_1_buckets as (
   select
     round(oi.discount * 100)::int as bucket,
-    sum(oi.profit) as bucket_profit
+    sum(oi.profit) as bucket_profit,
+    sum(oi.sales) as bucket_sales,
+    count(*) as bucket_lines
   from scoped oi
   group by round(oi.discount * 100)::int
 ),
@@ -58,6 +60,23 @@ rule_1_data as (
   group by rt.threshold_pct
 ),
 
+-- Evidence for the discount-scatter chart: one bucket-summary row per
+-- discount%, and one raw point per order line.
+rule_1_ladder as (
+  select jsonb_agg(
+    jsonb_build_object(
+      'discount', bucket, 'profit', bucket_profit,
+      'sales', bucket_sales, 'lines', bucket_lines
+    ) order by bucket
+  ) as ladder
+  from rule_1_buckets
+),
+
+rule_1_points as (
+  select jsonb_agg(jsonb_build_object('x', oi.discount, 'y', oi.profit)) as points
+  from scoped oi
+),
+
 rule_1 as (
   select jsonb_build_object(
     'id', id,
@@ -73,26 +92,46 @@ rule_1 as (
       jsonb_build_object('label', 'Lines affected', 'value', affected_count::text)
     ),
     'action', concat('Cap discretionary discounts at ', threshold_pct, '%; require approval above it.'),
-    'evidence', jsonb_build_object('type', 'discount-scatter')
+    'evidence', jsonb_build_object(
+      'type', 'discount-scatter',
+      'ladder', coalesce(rl.ladder, '[]'::jsonb),
+      'points', coalesce(rp.points, '[]'::jsonb)
+    )
   ) as finding
-  from rule_1_data
+  from rule_1_data, rule_1_ladder rl, rule_1_points rp
   where profit_lost is not null and profit_lost < 0
 ),
 
 -- Rule 2: Margin leak by sub-category
 -- High sales, negative profit per category
+rule_2_rows as (
+  select sub_category, jsonb_agg(
+    jsonb_build_object('product', name, 'sales', sales, 'profit', profit, 'discount', discount)
+    order by profit asc
+  ) as rows
+  from (
+    select
+      p.sub_category, p.name, oi.sales, oi.profit, oi.discount,
+      row_number() over (partition by p.sub_category order by oi.profit asc) as rn
+    from scoped oi
+    join products p on oi.product_id = p.product_id
+  ) ranked
+  where rn <= 5
+  group by sub_category
+),
+
 rule_2 as (
   select jsonb_build_object(
-    'id', concat('margin-leak-', sub_category),
+    'id', concat('margin-leak-', t.sub_category),
     'severity', 'critical',
-    'title', concat(sub_category, ' loses $', abs(profit_total)::int::text, ' on $', sales_total::int::text, ' of sales'),
-    'finding', concat(sub_category, ' sells well but returns a negative margin across ', line_count::text, ' order lines.'),
+    'title', concat(t.sub_category, ' loses $', abs(t.profit_total)::int::text, ' on $', t.sales_total::int::text, ' of sales'),
+    'finding', concat(t.sub_category, ' sells well but returns a negative margin across ', t.line_count::text, ' order lines.'),
     'metrics', jsonb_build_array(
-      jsonb_build_object('label', 'Sales', 'value', '$' || sales_total::int::text),
-      jsonb_build_object('label', 'Profit', 'value', '−$' || abs(profit_total)::int::text, 'tone', 'down')
+      jsonb_build_object('label', 'Sales', 'value', '$' || t.sales_total::int::text),
+      jsonb_build_object('label', 'Profit', 'value', '−$' || abs(t.profit_total)::int::text, 'tone', 'down')
     ),
-    'action', concat('Reprice ', sub_category, ' or withdraw its lowest-margin SKUs.'),
-    'evidence', jsonb_build_object('type', 'table')
+    'action', concat('Reprice ', t.sub_category, ' or withdraw its lowest-margin SKUs.'),
+    'evidence', jsonb_build_object('type', 'table', 'rows', coalesce(r2.rows, '[]'::jsonb))
   ) as finding
   from (
     select
@@ -105,6 +144,7 @@ rule_2 as (
     group by p.sub_category
     having sum(oi.profit) < -(select get_insight_setting('insight_min_loss', 1000))
   ) t
+  left join rule_2_rows r2 on r2.sub_category = t.sub_category
 ),
 
 -- Rule 3: Ship-lag outliers
@@ -121,14 +161,14 @@ rule_3 as (
       jsonb_build_object('label', 'Tail average', 'value', round(avg_tail, 1)::text || ' d')
     ),
     'action', concat('Audit the ', ship_mode, ' tail — the median is fine, the tail is not.'),
-    'evidence', jsonb_build_object('type', 'table')
+    'evidence', jsonb_build_object('type', 'table', 'rows', coalesce(rows, '[]'::jsonb))
   ) as finding
   from (
     -- The median has to be its own aggregation pass: Postgres rejects an
     -- ordered-set aggregate inside FILTER, so it cannot be computed and
     -- compared against in the same select.
     with mode_lags as (
-      select o.ship_mode, o.ship_lag_days
+      select o.order_id, o.ship_mode, o.ship_lag_days
       from scoped oi
       join orders o on oi.order_id = o.order_id
     ),
@@ -138,6 +178,23 @@ rule_3 as (
         percentile_cont(0.5) within group (order by ship_lag_days)::int as mode_median
       from mode_lags
       group by ship_mode
+    ),
+    tail_rows as (
+      select
+        ship_mode,
+        jsonb_agg(
+          jsonb_build_object('order_id', order_id, 'ship_mode', ship_mode, 'ship_lag_days', ship_lag_days)
+          order by ship_lag_days desc
+        ) as rows
+      from (
+        select l.order_id, l.ship_mode, l.ship_lag_days,
+          row_number() over (partition by l.ship_mode order by l.ship_lag_days desc) as rn
+        from mode_lags l
+        join mode_medians m on m.ship_mode = l.ship_mode
+        where l.ship_lag_days > m.mode_median + 2
+      ) ranked
+      where rn <= 5
+      group by ship_mode
     )
     select
       m.ship_mode,
@@ -145,10 +202,12 @@ rule_3 as (
       count(*) as mode_count,
       count(*) filter (where l.ship_lag_days > m.mode_median + 2)::int as tail_count,
       (count(*) filter (where l.ship_lag_days > m.mode_median + 2)::float / count(*)) as tail_pct,
-      avg(l.ship_lag_days) filter (where l.ship_lag_days > m.mode_median + 2) as avg_tail
+      avg(l.ship_lag_days) filter (where l.ship_lag_days > m.mode_median + 2) as avg_tail,
+      tr.rows
     from mode_lags l
     join mode_medians m on m.ship_mode = l.ship_mode
-    group by m.ship_mode, m.mode_median
+    left join tail_rows tr on tr.ship_mode = m.ship_mode
+    group by m.ship_mode, m.mode_median, tr.rows
   ) t
   where tail_pct > 0.1
 ),
@@ -166,7 +225,7 @@ rule_4 as (
       jsonb_build_object('label', 'Accounts', 'value', top_count::text)
     ),
     'action', 'Assign named ownership to the top 5% before the next quarter.',
-    'evidence', jsonb_build_object('type', 'table')
+    'evidence', jsonb_build_object('type', 'table', 'rows', coalesce(rows, '[]'::jsonb))
   ) as finding
   from (
     with customer_revenue as (
@@ -178,6 +237,7 @@ rule_4 as (
     ),
     ranked as (
       select
+        order_id,
         revenue,
         row_number() over (order by revenue desc) as rank,
         count(*) over () as total_count
@@ -193,11 +253,16 @@ rule_4 as (
       from ranked r, top_n tn
       where r.rank <= tn.top_count
       group by tn.top_count
+    ),
+    top_rows as (
+      select jsonb_agg(jsonb_build_object('order_id', order_id, 'revenue', revenue) order by revenue desc) as rows
+      from (select order_id, revenue from ranked order by revenue desc limit 5) top5
     )
     select
       round(100 * top_revenue / (select sum(revenue) from ranked))::int as top_share_pct,
-      top_count
-    from top_5pct
+      top_count,
+      tr.rows
+    from top_5pct, top_rows tr
   ) result
   where top_share_pct > 15
 ),
@@ -215,7 +280,7 @@ rule_5 as (
       jsonb_build_object('label', 'Combined loss', 'value', '−$' || abs(total_loss)::int::text, 'tone', 'down')
     ),
     'action', 'Delist or reprice the ten worst SKUs.',
-    'evidence', jsonb_build_object('type', 'table')
+    'evidence', jsonb_build_object('type', 'table', 'rows', coalesce(rows, '[]'::jsonb))
   ) as finding
   from (
     -- Per-product totals have to land in their own CTE first. Rolling them up
@@ -225,18 +290,27 @@ rule_5 as (
       select
         p.name,
         sum(oi.profit) as profit,
+        sum(oi.sales) as sales,
         count(*) as lines
       from scoped oi
       join products p on oi.product_id = p.product_id
       group by p.product_id, p.name
       having sum(oi.profit) < 0
+    ),
+    worst_rows as (
+      select jsonb_agg(
+        jsonb_build_object('name', name, 'profit', profit, 'sales', sales, 'lines', lines)
+        order by profit asc
+      ) as rows
+      from (select * from product_profit order by profit asc limit 10) top10
     )
     select
       count(*) as loser_count,
       (array_agg(name order by profit asc))[1] as worst_name,
       abs((array_agg(profit order by profit asc))[1]) as worst_loss,
       (array_agg(lines order by profit asc))[1]::text as worst_lines,
-      sum(profit) as total_loss
+      sum(profit) as total_loss,
+      (select rows from worst_rows) as rows
     from product_profit
   ) t
   where loser_count > 0
@@ -256,7 +330,7 @@ rule_6 as (
       jsonb_build_object('label', 'Trend delta', 'value', '$' || (current_month_sales - trend_avg)::int::text)
     ),
     'action', concat('Review ', region, ' pipeline and discounting.'),
-    'evidence', jsonb_build_object('type', 'table')
+    'evidence', jsonb_build_object('type', 'table', 'rows', coalesce(rows, '[]'::jsonb))
   ) as finding
   from (
     with monthly_sales as (
@@ -274,6 +348,7 @@ rule_6 as (
     ranked_months as (
       select
         region,
+        month,
         sales,
         row_number() over (partition by region order by month desc) as rn
       from monthly_sales
@@ -286,14 +361,24 @@ rule_6 as (
       from ranked_months
       where rn <= 4
       group by region
+    ),
+    trend_rows as (
+      select
+        region,
+        jsonb_agg(jsonb_build_object('month', month, 'sales', sales) order by month desc) as rows
+      from ranked_months
+      where rn <= 4
+      group by region
     )
     select
-      region,
-      current_month_sales,
-      trend_avg,
-      round(100 * (1 - current_month_sales / trend_avg))::int as pct_below
-    from region_trend
-    where trend_avg > 0 and current_month_sales is not null
+      rt.region,
+      rt.current_month_sales,
+      rt.trend_avg,
+      round(100 * (1 - rt.current_month_sales / rt.trend_avg))::int as pct_below,
+      tr.rows
+    from region_trend rt
+    left join trend_rows tr on tr.region = rt.region
+    where rt.trend_avg > 0 and rt.current_month_sales is not null
   ) t
   where pct_below > 15
 ),

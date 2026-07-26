@@ -10,6 +10,10 @@ const severityBg = {
   good: 'rgba(12, 163, 12, 0.08)',
 };
 
+function hasEvidence(evidence) {
+  return Boolean(evidence?.rows?.length > 0 || evidence?.points?.length > 0);
+}
+
 export function InsightCard({ insight, onShowEvidence }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -56,7 +60,7 @@ export function InsightCard({ insight, onShowEvidence }) {
         </div>
 
         {/* Show evidence button */}
-        {insight.evidence && (
+        {hasEvidence(insight.evidence) && (
           <button
             onClick={() => setExpanded(!expanded)}
             className="text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
@@ -67,7 +71,7 @@ export function InsightCard({ insight, onShowEvidence }) {
       </div>
 
       {/* Expanded evidence */}
-      {expanded && insight.evidence && (
+      {expanded && hasEvidence(insight.evidence) && (
         <div className="border-t border-[var(--border-hairline)] p-6 bg-[var(--surface-sunken)]">
           <EvidenceTable evidence={insight.evidence} />
         </div>
