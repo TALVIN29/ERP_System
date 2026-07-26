@@ -236,7 +236,7 @@ export function DiscountScatter({ points = [], ladder = [] }) {
             <svg ref={svgRef} style={{ position: 'absolute', top: 0, left: 0 }} />
           </div>
         </div>
-        {breakEven && (
+        {breakEven !== null && (
           <p className="text-[11px] text-[var(--text-secondary)] mt-2">
             Break-even point: approximately {Math.round(breakEven * 100)}%
           </p>
