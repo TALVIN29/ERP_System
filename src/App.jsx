@@ -36,6 +36,31 @@ function Root() {
   );
 }
 
+/** Catches any render-time throw the data router surfaces (from any route,
+ *  not just a lazy-chunk failure — ChunkErrorBoundary only ever handles that
+ *  one case and rethrows everything else). Without this, one bad page crashes
+ *  the whole app to react-router's raw "Unexpected Application Error!" — see
+ *  debug/full-review/pages.md and debug/full-review/charts.md for two bugs
+ *  this would otherwise have taken the whole SPA down for. */
+function RootError() {
+  return (
+    <div className="flex h-screen items-center justify-center px-6 text-center">
+      <div>
+        <h1 className="text-[20px] font-semibold mb-2">Something went wrong</h1>
+        <p className="text-[13px] text-[var(--text-secondary)] mb-4">
+          Try reloading the page. If it keeps happening, contact an administrator.
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="h-9 px-4 rounded-[var(--radius-md)] bg-[var(--series-1)] text-white text-[13px] font-medium"
+        >
+          Reload
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const CHUNK_ERROR = /Failed to fetch dynamically imported module|Importing a module script failed/i;
 const RELOAD_FLAG = 'chunk-reload-attempted';
 
@@ -80,7 +105,7 @@ function Lazy({ children }) {
  */
 export const router = createBrowserRouter(
   createRoutesFromElements(
-    <Route element={<Root />}>
+    <Route element={<Root />} errorElement={<RootError />}>
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
